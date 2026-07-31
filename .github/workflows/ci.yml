@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run pytest
+      - if: matrix.python == '3.13'
+        run: uv run ruff check .
+      - if: matrix.python == '3.13'
+        run: uv build --no-sources
+      - if: matrix.python == '3.13'
+        run: uv pip install --reinstall --no-deps dist/*.whl
+      - if: matrix.python == '3.13'
+        run: >-
+          uv run --no-sync python -c
+          "from importlib.metadata import entry_points;
+          next(iter(entry_points(group='hermes_agent.plugins', name='mpp'))).load()"
+
+  httpx:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        httpx: ["0.27.0", "0.28.1"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv pip install "httpx==${{ matrix.httpx }}"
+      - run: uv run --no-sync pytest tests/test_config.py tests/test_httpx.py

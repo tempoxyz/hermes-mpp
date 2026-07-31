@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hermes-mpp"
+version = "0.1.0"
+description = "Transparent MPP payments for Hermes Agent HTTP traffic"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = "MIT"
+authors = [{ name = "Tempo" }]
+dependencies = [
+    "httpx>=0.27,<0.29",
+    "pympp[tempo]>=0.10,<0.11",
+]
+
+[project.entry-points."hermes_agent.plugins"]
+mpp = "hermes_mpp"
+
+[dependency-groups]
+dev = [
+    "hermes-agent==0.19.0",
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.15",
+]
+
+[tool.uv.sources]
+pympp = { git = "https://github.com/tempoxyz/pympp.git", rev = "4d47c66667c7dbf69fc3870f3c67cefcc6ba4648" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hermes_mpp"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
