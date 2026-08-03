@@ -194,6 +194,41 @@ def test_paid_retry_honors_challenge_cookie_deletion() -> None:
     instrumentation.close()
 
 
+@pytest.mark.parametrize(
+    ("url", "set_cookie"),
+    [
+        (f"{ALLOWED}/paid", "session=new; Path=/other"),
+        (f"{ALLOWED}/paid", "session=new; Domain=other.test; Path=/"),
+        ("http://allowed.test/paid", "session=new; Secure; Path=/"),
+        (f"{ALLOWED}/paid", "session=; Max-Age=0; Path=/other"),
+    ],
+)
+def test_scoped_cookie_update_does_not_remove_manual_cookie(
+    url: str,
+    set_cookie: str,
+) -> None:
+    method = FakeMethod()
+    instrumentation = instrument_httpx(
+        lambda: PaymentRuntime([method]),
+        [url.removesuffix("/paid")],
+    )
+    cookies: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        cookies.append(request.headers.get("cookie", ""))
+        if "authorization" in request.headers:
+            return httpx.Response(200)
+        response = required("scoped-cookie")
+        response.headers["set-cookie"] = set_cookie
+        return response
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert client.get(url, headers={"cookie": "session=manual"}).status_code == 200
+
+    assert cookies == ["session=manual", "session=manual"]
+    instrumentation.close()
+
+
 def test_origin_policy_includes_redirect_target() -> None:
     method, _, instrumentation = setup()
     requests: list[httpx.Request] = []
@@ -216,6 +251,19 @@ def test_origin_policy_includes_redirect_target() -> None:
     assert len(requests) == 2
     assert method.calls == 0
     assert all("authorization" not in request.headers for request in requests)
+    instrumentation.close()
+
+
+def test_missing_origin_policy_allows_any_origin() -> None:
+    method = FakeMethod()
+    instrumentation = instrument_httpx(lambda: PaymentRuntime([method]), None)
+    requests: list[httpx.Request] = []
+
+    with httpx.Client(transport=paid_handler("anywhere", requests)) as client:
+        assert client.get("https://anywhere.test/paid").status_code == 200
+
+    assert_paid(requests)
+    assert method.calls == 1
     instrumentation.close()
 
 

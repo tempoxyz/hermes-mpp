@@ -10,30 +10,25 @@ def test_reads_minimal_environment() -> None:
         {
             "TEMPO_PRIVATE_KEY": "  0xsecret  ",
             "MPP_ALLOWED_ORIGINS": "https://one.test, https://two.test ",
-            "TEMPO_RPC_URL": " https://rpc.test ",
         }
     )
 
     assert config == Config(
         private_key="0xsecret",
         allowed_origins=("https://one.test", "https://two.test"),
-        rpc_url="https://rpc.test",
     )
 
 
-@pytest.mark.parametrize(
-    ("env", "message"),
-    [
-        ({}, "$TEMPO_PRIVATE_KEY is required"),
-        (
-            {"TEMPO_PRIVATE_KEY": "0xsecret"},
-            "$MPP_ALLOWED_ORIGINS is required",
-        ),
-    ],
-)
-def test_requires_key_and_origins(
-    env: dict[str, str],
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message.replace("$", r"\$")):
-        Config.from_env(env)
+def test_allows_every_origin_when_allowlist_is_unset_or_blank() -> None:
+    assert Config.from_env({"TEMPO_PRIVATE_KEY": "0xsecret"}).allowed_origins is None
+    assert (
+        Config.from_env(
+            {"TEMPO_PRIVATE_KEY": "0xsecret", "MPP_ALLOWED_ORIGINS": " , "}
+        ).allowed_origins
+        is None
+    )
+
+
+def test_requires_key() -> None:
+    with pytest.raises(ValueError, match=r"\$TEMPO_PRIVATE_KEY is required"):
+        Config.from_env({})

@@ -8,8 +8,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True, slots=True)
 class Config:
     private_key: str
-    allowed_origins: tuple[str, ...]
-    rpc_url: str | None = None
+    allowed_origins: tuple[str, ...] | None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Config:
@@ -23,11 +22,8 @@ class Config:
             for value in values.get("MPP_ALLOWED_ORIGINS", "").split(",")
             if value.strip()
         )
-        if not allowed_origins:
-            raise ValueError("$MPP_ALLOWED_ORIGINS is required")
 
         return cls(
             private_key=private_key,
-            allowed_origins=allowed_origins,
-            rpc_url=values.get("TEMPO_RPC_URL", "").strip() or None,
+            allowed_origins=allowed_origins or None,
         )

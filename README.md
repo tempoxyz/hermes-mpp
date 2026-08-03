@@ -1,73 +1,61 @@
 # hermes-mpp
 
-`hermes-mpp` makes ordinary in-process HTTPX requests from
-[Hermes Agent](https://hermes-agent.nousresearch.com) payment-aware. When an
-allowed origin returns an MPP `402`, the plugin signs a Tempo charge with a
-local private key and retries through the same HTTPX client. It exposes no
-model-facing payment tool.
+`hermes-mpp` makes [Hermes Agent](https://hermes-agent.nousresearch.com) HTTP
+requests payment-aware. When an endpoint returns an MPP `402`, the plugin signs
+a Tempo charge with a local private key and retries the same request through the
+same HTTPX client.
 
 V1 targets Hermes Agent 0.19, HTTPX 0.27–0.28, and pympp 0.10.
 
 ## Install
 
-The standard Hermes installer creates a managed virtual environment. Install
-the plugin there, then enable its entry point without granting tool overrides:
+After [installing Hermes](https://hermes-agent.nousresearch.com/docs/getting-started/quickstart),
+run:
 
 ```sh
-HERMES_ROOT="${HERMES_HOME:-$HOME/.hermes}/hermes-agent"
-uv pip install --python "$HERMES_ROOT/venv/bin/python" \
-  "hermes-mpp @ git+ssh://git@github.com/tempoxyz/hermes-mpp.git"
-hermes plugins enable mpp --no-allow-tool-override
+uvx hermes-mpp install
 ```
 
-Restart Hermes after installation or configuration changes.
+The installer adds the plugin to Hermes's managed environment, enables it, and
+prompts you to import a Tempo private key or generate one. Keys are
+stored in `~/.hermes/.env` with owner-only permissions. The installer also tries
+to fund the wallet on Tempo Moderato so the Boutique smoke test works immediately.
+Use `--no-testnet-funds` to skip that step.
 
-## Configure
+Use a dedicated, low-balance key. By default, any origin can charge it through
+a valid MPP challenge without a separate prompt or spend cap. To restrict
+automatic payments, set an exact, comma-separated allowlist:
 
 ```sh
-export TEMPO_PRIVATE_KEY=0x...
-export MPP_ALLOWED_ORIGINS=https://mpp.boutique
-export TEMPO_RPC_URL=https://rpc.moderato.tempo.xyz
+MPP_ALLOWED_ORIGINS=https://mpp.boutique,https://api.example.com
 ```
 
-Use a dedicated, low-balance key. `MPP_ALLOWED_ORIGINS` accepts comma-separated,
-exact HTTP or HTTPS origins; paths and wildcards are rejected. Allowlisting an
-origin authorizes automatic charges from that origin with no separate spend cap
-or approval prompt.
+Paths and wildcards are rejected. The challenge's Tempo chain ID selects the
+corresponding public RPC, so no RPC configuration or network switch is needed.
+Use plaintext `http://` origins only for trusted local development: an on-path
+attacker can inject a payment challenge into an unencrypted response.
 
-`TEMPO_RPC_URL` is optional in general, but the Moderato URL above is needed for
-the MPP Boutique testnet charge.
+## Use
 
-## Smoke test MPP Boutique
-
-Fund the key with Moderato pathUSD, export the variables above, then run:
+Ask Hermes for the resource normally:
 
 ```sh
-HERMES_ROOT="${HERMES_HOME:-$HOME/.hermes}/hermes-agent"
-"$HERMES_ROOT/venv/bin/python" - <<'PY'
-from uuid import uuid4
-
-import httpx
-from hermes_cli.plugins import PluginManager
-
-PluginManager().discover_and_load()
-response = httpx.post(
-    "https://mpp.boutique/api/buy?item=mpp-cap",
-    json={"name": f"Hermes MPP {uuid4()}"},
-    timeout=60,
-)
-response.raise_for_status()
-print(response.json())
-PY
+hermes chat -q "Buy the mpp-cap from mpp.boutique and name it Parv"
 ```
 
-The request starts as an ordinary HTTPX call. A successful result is a paid
-`201` response for the Tempo Hat.
+Boutique permits one claim per name, so substitute a unique name when needed.
+
+The plugin exposes one generic `mpp_fetch` tool so the model can discover and
+call arbitrary HTTP APIs. Payment is not a separate tool call: `mpp_fetch` and
+all other in-process HTTPX clients automatically handle supported MPP `402`
+challenges.
 
 ## Behavior
 
 - Existing and future sync and async HTTPX clients are instrumented.
-- Requests outside the origin allowlist pass through untouched.
+- With no `MPP_ALLOWED_ORIGINS`, valid MPP challenges from any origin may charge
+  the configured wallet. When set, requests outside the allowlist pass through
+  untouched.
 - Unsupported or malformed challenges remain ordinary `402` responses.
 - The original client's transport, connection pool, cookies, hooks, redirects,
   extensions, and streaming behavior are retained.
@@ -75,8 +63,10 @@ The request starts as an ordinary HTTPX call. A successful result is a paid
   uncertain outcomes fail closed to avoid accidental double payment.
 - Instrumentation is restored at process exit.
 
-Only in-process HTTPX traffic is covered. Requests, aiohttp, urllib3, and
-subprocess traffic are not instrumented.
+Only HTTPX traffic in the Hermes Python process can be instrumented. Shell
+commands such as `curl`, and libraries such as Requests, aiohttp, and urllib3,
+run outside this seam; Hermes should use `mpp_fetch` for arbitrary paid HTTP
+calls.
 
 ## Develop
 
