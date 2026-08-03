@@ -12,7 +12,6 @@ from mpp.runtime import PaymentRuntime
 from .config import Config
 from .httpx import HttpxInstrumentation, instrument_httpx
 from .tempo import ChallengeTempo
-from .tool import register_tool
 
 _instrumentation: HttpxInstrumentation | None = None
 _lock = threading.Lock()
@@ -29,6 +28,8 @@ def _create_instrumentation(config: Config) -> HttpxInstrumentation:
 
 def register(ctx: Any) -> None:
     """Make Hermes HTTP requests payment-aware."""
+    from .tool import register_tool
+
     global _instrumentation
     with _lock:
         instrumentation = _instrumentation

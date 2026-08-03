@@ -19,6 +19,10 @@ The installer adds and enables the plugin, then prompts for a Tempo private key;
 leave it blank to generate one. It stores the key in `~/.hermes/.env` with
 owner-only permissions and prints the address to fund.
 
+The installer discovers standard, root, and `PATH`-based Hermes installations.
+For a custom environment, run `uvx hermes-mpp install --hermes-python PATH` or
+set `HERMES_PYTHON`.
+
 Generated wallets start empty. For Moderato resources, fund the printed address
 with the [Tempo faucet](https://docs.tempo.xyz/guide/use-accounts/add-funds).
 
