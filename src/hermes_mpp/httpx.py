@@ -40,18 +40,23 @@ class _Attempt:
     challenge: Challenge
     request: httpx.Request
     credential: Credential | None = None
+    holds_gate: bool = False
 
 
 class _Ledger:
-    """Fail closed while an equivalent payment is active or uncertain."""
+    """Serialize wallet payments and fail closed on duplicates or uncertainty."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
+        self._gate = threading.Lock()
         self._entries: dict[tuple[Any, ...], _Attempt | PaymentOutcomeUnknownError] = {}
+        self._uncertain: PaymentOutcomeUnknownError | None = None
 
-    def begin(self, challenge: Challenge, request: httpx.Request) -> _Attempt:
+    async def begin(self, challenge: Challenge, request: httpx.Request) -> _Attempt:
         attempt = _Attempt(_attempt_keys(challenge, request), challenge, request)
         with self._lock:
+            if self._uncertain is not None:
+                raise self._uncertain
             for key in attempt.keys:
                 existing = self._entries.get(key)
                 if isinstance(existing, PaymentOutcomeUnknownError):
@@ -65,6 +70,20 @@ class _Ledger:
                     )
             for key in attempt.keys:
                 self._entries[key] = attempt
+
+        try:
+            while not self._gate.acquire(blocking=False):
+                await asyncio.sleep(0.01)
+            attempt.holds_gate = True
+        except BaseException:
+            self.complete(attempt)
+            raise
+
+        with self._lock:
+            uncertain = self._uncertain
+        if uncertain is not None:
+            self.complete(attempt)
+            raise uncertain
         return attempt
 
     def sent(self, attempt: _Attempt, credential: Credential) -> None:
@@ -77,14 +96,22 @@ class _Ledger:
         error: PaymentOutcomeUnknownError,
     ) -> None:
         with self._lock:
+            self._uncertain = error
             for key in attempt.keys:
                 self._entries[key] = error
+            self._release(attempt)
 
     def complete(self, attempt: _Attempt) -> None:
         with self._lock:
             for key in attempt.keys:
                 if self._entries.get(key) is attempt:
                     self._entries.pop(key)
+            self._release(attempt)
+
+    def _release(self, attempt: _Attempt) -> None:
+        if attempt.holds_gate:
+            attempt.holds_gate = False
+            self._gate.release()
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,8 +270,8 @@ class HttpxInstrumentation:
             ) from cause
 
         try:
-            attempt = self._ledger.begin(match.challenge, request)
-        except PaymentOutcomeUnknownError:
+            attempt = await self._ledger.begin(match.challenge, request)
+        except (PaymentOutcomeUnknownError, asyncio.CancelledError):
             await _close_quietly(response, asynchronous)
             raise
 

@@ -4,6 +4,8 @@ import stat
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from hermes_mpp import cli
 
 PRIVATE_KEY = "0x" + "11" * 32
@@ -41,6 +43,17 @@ def test_wallet_reuses_existing_key_without_prompt(
     )
 
     assert cli._wallet(env_file).private_key == PRIVATE_KEY.removeprefix("0x")
+
+
+def test_wallet_rejects_invalid_key_without_modifying_file(tmp_path: Path, monkeypatch) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("EXISTING=value\n", encoding="utf-8")
+    monkeypatch.setenv("TEMPO_PRIVATE_KEY", "invalid")
+
+    with pytest.raises(SystemExit, match="Invalid Tempo private key"):
+        cli._wallet(env_file)
+
+    assert env_file.read_text(encoding="utf-8") == "EXISTING=value\n"
 
 
 def test_install_targets_hermes_and_enables_plugin(

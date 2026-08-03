@@ -408,7 +408,7 @@ def test_non_success_paid_response_stays_uncertain() -> None:
     instrumentation.close()
 
 
-def test_lost_paid_response_blocks_a_new_challenge_for_same_operation() -> None:
+def test_lost_paid_response_blocks_later_wallet_payments() -> None:
     method, _, instrumentation = setup()
     requests: list[httpx.Request] = []
 
@@ -425,7 +425,7 @@ def test_lost_paid_response_blocks_a_new_challenge_for_same_operation() -> None:
 
     with httpx.Client(transport=paid_handler("different", requests)) as client:
         with pytest.raises(PaymentOutcomeUnknownError):
-            client.get(f"{ALLOWED}/lost")
+            client.get(f"{ALLOWED}/different")
 
     assert len(requests) == 3
     assert method.calls == 1
@@ -458,6 +458,38 @@ def test_concurrent_equivalent_payment_is_not_sent_twice() -> None:
         assert first.result(timeout=5) == 200
 
     assert method.calls == 1
+    instrumentation.close()
+
+
+def test_distinct_payments_are_serialized() -> None:
+    method, _, instrumentation = setup()
+    first_paid = threading.Event()
+    second_paid = threading.Event()
+    release = threading.Event()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "authorization" not in request.headers:
+            return required(request.url.path)
+        if request.url.path == "/first":
+            first_paid.set()
+            assert release.wait(timeout=5)
+        else:
+            second_paid.set()
+        return httpx.Response(200)
+
+    def send(path: str) -> int:
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            return client.get(f"{ALLOWED}/{path}").status_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(send, "first")
+        assert first_paid.wait(timeout=5)
+        second = executor.submit(send, "second")
+        assert not second_paid.wait(timeout=0.05)
+        release.set()
+        assert first.result(timeout=5) == second.result(timeout=5) == 200
+
+    assert method.calls == 2
     instrumentation.close()
 
 
