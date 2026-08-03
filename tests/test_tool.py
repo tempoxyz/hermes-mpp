@@ -9,7 +9,11 @@ import hermes_mpp.tool as tool
 
 
 @pytest.mark.asyncio
-async def test_fetches_json_with_ordinary_httpx(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("payload", [{"name": "Parv"}, [1, 2], "value", 1, True, None])
+async def test_fetches_json_with_ordinary_httpx(
+    monkeypatch: pytest.MonkeyPatch,
+    payload: object,
+) -> None:
     requests: list[httpx.Request] = []
     client_type = httpx.AsyncClient
 
@@ -29,7 +33,7 @@ async def test_fetches_json_with_ordinary_httpx(monkeypatch: pytest.MonkeyPatch)
                 "url": "https://shop.test/buy",
                 "method": "post",
                 "headers": {"x-request": "yes"},
-                "json": {"name": "Parv"},
+                "json": payload,
             }
         )
     )
@@ -39,7 +43,11 @@ async def test_fetches_json_with_ordinary_httpx(monkeypatch: pytest.MonkeyPatch)
     assert result["headers"]["x-result"] == "ok"
     assert requests[0].method == "POST"
     assert requests[0].headers["x-request"] == "yes"
-    assert json.loads(requests[0].content) == {"name": "Parv"}
+    assert json.loads(requests[0].content) == payload
+
+
+def test_schema_accepts_any_json_value() -> None:
+    assert "type" not in tool.SCHEMA["parameters"]["properties"]["json"]
 
 
 @pytest.mark.asyncio

@@ -22,7 +22,7 @@ SCHEMA = {
                 "additionalProperties": {"type": "string"},
             },
             "body": {"type": "string", "description": "Raw request body."},
-            "json": {"type": "object", "description": "JSON request body."},
+            "json": {"description": "JSON body: object, array, scalar, or null."},
         },
         "required": ["url"],
         "additionalProperties": False,
@@ -34,11 +34,16 @@ async def mpp_fetch(args: dict[str, Any], **_: Any) -> str:
     if "body" in args and "json" in args:
         raise ValueError("body and json are mutually exclusive")
 
-    request: dict[str, Any] = {"headers": args.get("headers")}
+    headers = httpx.Headers(args.get("headers"))
+    request: dict[str, Any] = {"headers": headers}
     if "body" in args:
         request["content"] = args["body"]
     if "json" in args:
-        request["json"] = args["json"]
+        if args["json"] is None:
+            headers.setdefault("Content-Type", "application/json")
+            request["content"] = "null"
+        else:
+            request["json"] = args["json"]
 
     async with httpx.AsyncClient(follow_redirects=True, timeout=60) as client:
         response = await client.request(
