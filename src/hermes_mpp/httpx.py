@@ -141,28 +141,18 @@ class HttpxInstrumentation:
         self._runtime_factory = runtime_factory
         self._origins = _parse_origins(origins)
         self._ledger = _Ledger()
-        self._sync_original = inspect.getattr_static(httpx.Client, "_send_handling_redirects")
-        self._async_original = inspect.getattr_static(httpx.AsyncClient, "_send_handling_redirects")
+        self._sync_original = inspect.getattr_static(httpx.Client, "_send_single_request")
+        self._async_original = inspect.getattr_static(httpx.AsyncClient, "_send_single_request")
 
         @wraps(self._sync_original)
         def sync_send(
             client: httpx.Client,
             request: httpx.Request,
-            follow_redirects: bool,
-            history: list[httpx.Response],
         ) -> httpx.Response:
-            def raw(
-                target: httpx.Request,
-                past: list[httpx.Response],
-            ) -> httpx.Response:
-                return self._sync_original(
-                    client,
-                    target,
-                    follow_redirects=follow_redirects,
-                    history=past,
-                )
+            def raw(target: httpx.Request) -> httpx.Response:
+                return self._sync_original(client, target)
 
-            response = raw(request, history)
+            response = raw(request)
             if not self._should_pay(request, response):
                 return response
 
@@ -176,7 +166,7 @@ class HttpxInstrumentation:
             if prepared is None:
                 return response
             try:
-                payment_response = raw(prepared.retry, list(response.history))
+                payment_response = raw(prepared.retry)
             except (Exception, asyncio.CancelledError) as cause:
                 failure = cause
                 error = _run_async(lambda: self._fail_sent(prepared, failure))
@@ -187,21 +177,11 @@ class HttpxInstrumentation:
         async def async_send(
             client: httpx.AsyncClient,
             request: httpx.Request,
-            follow_redirects: bool,
-            history: list[httpx.Response],
         ) -> httpx.Response:
-            async def send(
-                target: httpx.Request,
-                past: list[httpx.Response],
-            ) -> httpx.Response:
-                return await self._async_original(
-                    client,
-                    target,
-                    follow_redirects=follow_redirects,
-                    history=past,
-                )
+            async def send(target: httpx.Request) -> httpx.Response:
+                return await self._async_original(client, target)
 
-            response = await send(request, history)
+            response = await send(request)
             if not self._should_pay(request, response):
                 return response
             prepared = await self._prepare_402(
@@ -212,7 +192,7 @@ class HttpxInstrumentation:
             if prepared is None:
                 return response
             try:
-                payment_response = await send(prepared.retry, list(response.history))
+                payment_response = await send(prepared.retry)
             except (Exception, asyncio.CancelledError) as cause:
                 error = await self._fail_sent(prepared, cause)
                 raise error from cause
@@ -367,18 +347,18 @@ class HttpxInstrumentation:
             if _OWNER is not None:
                 raise RuntimeError("HTTPX is already instrumented")
             if (
-                inspect.getattr_static(httpx.Client, "_send_handling_redirects")
+                inspect.getattr_static(httpx.Client, "_send_single_request")
                 is not self._sync_original
-                or inspect.getattr_static(httpx.AsyncClient, "_send_handling_redirects")
+                or inspect.getattr_static(httpx.AsyncClient, "_send_single_request")
                 is not self._async_original
             ):
                 raise RuntimeError("HTTPX is already instrumented")
 
-            httpx.Client._send_handling_redirects = self._sync_wrapper  # type: ignore[method-assign]
+            httpx.Client._send_single_request = self._sync_wrapper  # type: ignore[method-assign]
             try:
-                httpx.AsyncClient._send_handling_redirects = self._async_wrapper  # type: ignore[method-assign]
+                httpx.AsyncClient._send_single_request = self._async_wrapper  # type: ignore[method-assign]
             except BaseException:
-                httpx.Client._send_handling_redirects = self._sync_original  # type: ignore[method-assign]
+                httpx.Client._send_single_request = self._sync_original  # type: ignore[method-assign]
                 raise
             _OWNER = self
 
@@ -388,15 +368,14 @@ class HttpxInstrumentation:
             if _OWNER is not self:
                 return
             if (
-                inspect.getattr_static(httpx.Client, "_send_handling_redirects")
-                is self._sync_wrapper
+                inspect.getattr_static(httpx.Client, "_send_single_request") is self._sync_wrapper
             ):
-                httpx.Client._send_handling_redirects = self._sync_original  # type: ignore[method-assign]
+                httpx.Client._send_single_request = self._sync_original  # type: ignore[method-assign]
             if (
-                inspect.getattr_static(httpx.AsyncClient, "_send_handling_redirects")
+                inspect.getattr_static(httpx.AsyncClient, "_send_single_request")
                 is self._async_wrapper
             ):
-                httpx.AsyncClient._send_handling_redirects = self._async_original  # type: ignore[method-assign]
+                httpx.AsyncClient._send_single_request = self._async_original  # type: ignore[method-assign]
             _OWNER = None
 
 
@@ -712,10 +691,10 @@ def _validate_httpx() -> None:
     if version not in _SUPPORTED_HTTPX:
         raise RuntimeError(f"Unsupported HTTPX {httpx.__version__}; expected >=0.27,<0.29")
 
-    expected = ("self", "request", "follow_redirects", "history")
+    expected = ("self", "request")
     for owner, asynchronous in ((httpx.Client, False), (httpx.AsyncClient, True)):
-        seam = inspect.getattr_static(owner, "_send_handling_redirects")
+        seam = inspect.getattr_static(owner, "_send_single_request")
         if tuple(inspect.signature(seam).parameters) != expected:
-            raise RuntimeError(f"Unsupported HTTPX seam: {owner.__name__}._send_handling_redirects")
+            raise RuntimeError(f"Unsupported HTTPX seam: {owner.__name__}._send_single_request")
         if inspect.iscoroutinefunction(seam) is not asynchronous:
             raise RuntimeError(f"Unsupported HTTPX seam type: {owner.__name__}")

@@ -48,7 +48,7 @@ def test_real_hermes_entrypoint_load_is_idempotent(
     hermes_mpp._shutdown()
     assert hermes_mpp._instrumentation is None
     assert (
-        inspect.getattr_static(httpx.Client, "_send_handling_redirects")
+        inspect.getattr_static(httpx.Client, "_send_single_request")
         is instrumentation._sync_original
     )
 
@@ -59,10 +59,10 @@ def test_registration_failure_restores_httpx(monkeypatch) -> None:
             raise RuntimeError("conflict")
 
     monkeypatch.setenv("TEMPO_PRIVATE_KEY", TEST_PRIVATE_KEY)
-    original = inspect.getattr_static(httpx.Client, "_send_handling_redirects")
+    original = inspect.getattr_static(httpx.Client, "_send_single_request")
 
     with pytest.raises(RuntimeError, match="conflict"):
         hermes_mpp.register(Context())
 
     assert hermes_mpp._instrumentation is None
-    assert inspect.getattr_static(httpx.Client, "_send_handling_redirects") is original
+    assert inspect.getattr_static(httpx.Client, "_send_single_request") is original

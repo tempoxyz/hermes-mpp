@@ -110,6 +110,49 @@ def test_sync_async_preexisting_and_events() -> None:
     preexisting.close()
 
 
+def test_sync_response_hook_observes_only_paid_response() -> None:
+    requests: list[httpx.Request] = []
+    statuses: list[int] = []
+
+    def hook(response: httpx.Response) -> None:
+        statuses.append(response.status_code)
+        response.raise_for_status()
+
+    with httpx.Client(
+        transport=paid_handler("sync-hook", requests),
+        event_hooks={"response": [hook]},
+    ) as client:
+        method, _, instrumentation = setup()
+        assert client.get(f"{ALLOWED}/hook").status_code == 200
+
+    assert_paid(requests)
+    assert statuses == [200]
+    assert method.calls == 1
+    instrumentation.close()
+
+
+@pytest.mark.asyncio
+async def test_async_response_hook_observes_only_paid_response() -> None:
+    requests: list[httpx.Request] = []
+    statuses: list[int] = []
+
+    async def hook(response: httpx.Response) -> None:
+        statuses.append(response.status_code)
+        response.raise_for_status()
+
+    async with httpx.AsyncClient(
+        transport=paid_handler("async-hook", requests),
+        event_hooks={"response": [hook]},
+    ) as client:
+        method, _, instrumentation = setup()
+        assert (await client.get(f"{ALLOWED}/hook")).status_code == 200
+
+    assert_paid(requests)
+    assert statuses == [200]
+    assert method.calls == 1
+    instrumentation.close()
+
+
 @pytest.mark.asyncio
 async def test_sync_client_called_from_running_loop() -> None:
     method, _, instrumentation = setup()
@@ -638,12 +681,12 @@ def test_registration_is_transactional_and_restore_is_owner_safe() -> None:
     with pytest.raises(RuntimeError, match="already instrumented"):
         instrument_httpx(lambda: PaymentRuntime([method]), [ALLOWED])
 
-    original = inspect.getattr_static(httpx.Client, "_send_handling_redirects")
+    original = inspect.getattr_static(httpx.Client, "_send_single_request")
 
     def replacement(*_: Any, **__: Any) -> httpx.Response:
         raise AssertionError
 
-    httpx.Client._send_handling_redirects = replacement  # type: ignore[method-assign]
+    httpx.Client._send_single_request = replacement  # type: ignore[method-assign]
     first.close()
-    assert inspect.getattr_static(httpx.Client, "_send_handling_redirects") is replacement
-    httpx.Client._send_handling_redirects = original  # type: ignore[method-assign]
+    assert inspect.getattr_static(httpx.Client, "_send_single_request") is replacement
+    httpx.Client._send_single_request = original  # type: ignore[method-assign]
