@@ -17,17 +17,16 @@ uvx hermes-mpp install
 ```
 
 The installer adds the plugin to Hermes's managed environment, enables it, and
-prompts you to import a Tempo private key or generate one. Keys are
-stored in `~/.hermes/.env` with owner-only permissions. The installer also tries
-to fund the wallet on Tempo Moderato so the Boutique smoke test works immediately.
-Use `--no-testnet-funds` to skip that step.
+prompts you to import a Tempo private key or generate one. The key is stored in
+`~/.hermes/.env` with owner-only permissions, and the wallet address is printed
+so you can fund it with the assets required by the services you use.
 
 Use a dedicated, low-balance key. By default, any origin can charge it through
 a valid MPP challenge without a separate prompt or spend cap. To restrict
 automatic payments, set an exact, comma-separated allowlist:
 
 ```sh
-MPP_ALLOWED_ORIGINS=https://mpp.boutique,https://api.example.com
+MPP_ALLOWED_ORIGINS=https://mpp.dev,https://api.example.com
 ```
 
 Paths and wildcards are rejected. The challenge's Tempo chain ID selects the
@@ -40,10 +39,8 @@ attacker can inject a payment challenge into an unencrypted response.
 Ask Hermes for the resource normally:
 
 ```sh
-hermes chat -q "Buy the mpp-cap from mpp.boutique and name it Parv"
+hermes chat -q "Make a request to https://mpp.dev/api/ping/paid"
 ```
-
-Boutique permits one claim per name, so substitute a unique name when needed.
 
 The plugin exposes one generic `mpp_fetch` tool so the model can discover and
 call arbitrary HTTP APIs. Payment is not a separate tool call: `mpp_fetch` and

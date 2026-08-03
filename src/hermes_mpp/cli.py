@@ -9,10 +9,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import httpx
 from mpp.methods.tempo import TempoAccount
-
-_MODERATO_RPC = "https://rpc.moderato.tempo.xyz"
 
 
 def _hermes_home() -> Path:
@@ -60,28 +57,7 @@ def _wallet(env_file: Path) -> TempoAccount:
     return account
 
 
-def _fund_testnet(address: str) -> None:
-    try:
-        response = httpx.post(
-            _MODERATO_RPC,
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tempo_fundAddress",
-                "params": [address],
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
-        if "error" in response.json():
-            raise RuntimeError(response.json()["error"])
-    except Exception:
-        print(f"Could not fund the testnet wallet automatically. Wallet address: {address}")
-    else:
-        print(f"Funded testnet wallet {address} for mpp.boutique.")
-
-
-def install(source: str | None = None, *, fund_testnet: bool = True) -> None:
+def install() -> None:
     home = _hermes_home()
     python = _hermes_bin(home, "python")
     hermes = _hermes_bin(home, "hermes")
@@ -89,7 +65,7 @@ def install(source: str | None = None, *, fund_testnet: bool = True) -> None:
     if uv is None:
         raise SystemExit("uv is required to install hermes-mpp.")
 
-    package = source or f"hermes-mpp=={importlib.metadata.version('hermes-mpp')}"
+    package = f"hermes-mpp=={importlib.metadata.version('hermes-mpp')}"
     subprocess.run(
         [uv, "pip", "uninstall", "--python", str(python), "mpp-hermes"],
         check=True,
@@ -98,25 +74,21 @@ def install(source: str | None = None, *, fund_testnet: bool = True) -> None:
     )
     subprocess.run([uv, "pip", "install", "--python", str(python), package], check=True)
     account = _wallet(home / ".env")
-    if fund_testnet:
-        _fund_testnet(account.address)
     subprocess.run(
         [str(hermes), "plugins", "enable", "mpp", "--no-allow-tool-override"],
         check=True,
         env={**os.environ, "HERMES_HOME": str(home)},
     )
-    print('Ready. Try: hermes chat -q "Buy the mpp-cap from mpp.boutique and name it YOUR_NAME"')
+    print(f"Installed hermes-mpp. Wallet: {account.address}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Install and configure hermes-mpp.")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    command = subparsers.add_parser("install", help="Install into Hermes and configure a wallet.")
-    command.add_argument("--source", help=argparse.SUPPRESS)
-    command.add_argument("--no-testnet-funds", action="store_true")
+    subparsers.add_parser("install", help="Install into Hermes and configure a wallet.")
     args = parser.parse_args()
     if args.command == "install":
-        install(args.source, fund_testnet=not args.no_testnet_funds)
+        install()
 
 
 if __name__ == "__main__":

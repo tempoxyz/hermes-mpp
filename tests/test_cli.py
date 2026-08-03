@@ -46,15 +46,14 @@ def test_wallet_reuses_existing_key_without_prompt(
 def test_install_targets_hermes_and_enables_plugin(
     tmp_path: Path,
     monkeypatch,
+    capsys,
 ) -> None:
     calls: list[tuple[list[str], dict]] = []
-    funded: list[str] = []
     monkeypatch.setattr(cli, "_hermes_home", lambda: tmp_path)
     monkeypatch.setattr(cli, "_hermes_bin", lambda _, name: Path(f"/hermes/{name}"))
     monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/uv")
     monkeypatch.setattr(cli.importlib.metadata, "version", lambda _: "1.2.3")
     monkeypatch.setattr(cli, "_wallet", lambda _: SimpleNamespace(address="0xabc"))
-    monkeypatch.setattr(cli, "_fund_testnet", funded.append)
     monkeypatch.setattr(
         cli.subprocess,
         "run",
@@ -86,4 +85,4 @@ def test_install_targets_hermes_and_enables_plugin(
         "mpp",
         "--no-allow-tool-override",
     ]
-    assert funded == ["0xabc"]
+    assert capsys.readouterr().out == "Installed hermes-mpp. Wallet: 0xabc\n"
