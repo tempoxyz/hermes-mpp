@@ -99,3 +99,34 @@ def test_install_targets_hermes_and_enables_plugin(
         "--no-allow-tool-override",
     ]
     assert capsys.readouterr().out == "Installed hermes-mpp. Wallet: 0xabc\n"
+
+
+def test_uninstall_disables_plugin_and_keeps_wallet(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    calls: list[tuple[list[str], dict]] = []
+    monkeypatch.setattr(cli, "_hermes_home", lambda: tmp_path)
+    monkeypatch.setattr(cli, "_hermes_bin", lambda _, name: Path(f"/hermes/{name}"))
+    monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/uv")
+    monkeypatch.setattr(
+        cli.subprocess,
+        "run",
+        lambda command, **kwargs: calls.append((command, kwargs)),
+    )
+
+    cli.uninstall()
+
+    assert calls[0][0] == ["/hermes/hermes", "plugins", "disable", "mpp"]
+    assert calls[1][0] == [
+        "/usr/bin/uv",
+        "pip",
+        "uninstall",
+        "--python",
+        "/hermes/python",
+        "hermes-mpp",
+    ]
+    assert capsys.readouterr().out == (
+        "Uninstalled hermes-mpp. The wallet remains in Hermes's .env file.\n"
+    )

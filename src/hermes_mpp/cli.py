@@ -82,13 +82,33 @@ def install() -> None:
     print(f"Installed hermes-mpp. Wallet: {account.address}")
 
 
+def uninstall() -> None:
+    home = _hermes_home()
+    python = _hermes_bin(home, "python")
+    hermes = _hermes_bin(home, "hermes")
+    uv = shutil.which("uv")
+    if uv is None:
+        raise SystemExit("uv is required to uninstall hermes-mpp.")
+
+    subprocess.run(
+        [str(hermes), "plugins", "disable", "mpp"],
+        check=True,
+        env={**os.environ, "HERMES_HOME": str(home)},
+    )
+    subprocess.run([uv, "pip", "uninstall", "--python", str(python), "hermes-mpp"], check=True)
+    print("Uninstalled hermes-mpp. The wallet remains in Hermes's .env file.")
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Install and configure hermes-mpp.")
+    parser = argparse.ArgumentParser(description="Manage hermes-mpp for Hermes Agent.")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("install", help="Install into Hermes and configure a wallet.")
+    subparsers.add_parser("uninstall", help="Disable and remove hermes-mpp from Hermes.")
     args = parser.parse_args()
     if args.command == "install":
         install()
+    else:
+        uninstall()
 
 
 if __name__ == "__main__":

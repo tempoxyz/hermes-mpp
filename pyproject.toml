@@ -15,6 +15,9 @@ dependencies = [
     "pympp[tempo]>=0.10,<0.11",
 ]
 
+[project.urls]
+Repository = "https://github.com/tempoxyz/hermes-mpp"
+
 [project.scripts]
 hermes-mpp = "hermes_mpp.cli:main"
 

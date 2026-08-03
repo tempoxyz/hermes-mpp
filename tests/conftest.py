@@ -10,8 +10,8 @@ import hermes_mpp
 import hermes_mpp.httpx as httpx_integration
 
 SEAMS = (
-    (httpx.Client, "_send_handling_redirects"),
-    (httpx.AsyncClient, "_send_handling_redirects"),
+    (httpx.Client, "_send_single_request"),
+    (httpx.AsyncClient, "_send_single_request"),
 )
 ORIGINAL_SEAMS = tuple(inspect.getattr_static(owner, name) for owner, name in SEAMS)
 

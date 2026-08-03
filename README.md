@@ -19,6 +19,9 @@ The installer adds and enables the plugin, then prompts for a Tempo private key;
 leave it blank to generate one. It stores the key in `~/.hermes/.env` with
 owner-only permissions and prints the address to fund.
 
+Generated wallets start empty. For Moderato resources, fund the printed address
+with the [Tempo faucet](https://docs.tempo.xyz/guide/use-accounts/add-funds).
+
 Use a dedicated, low-balance key. By default, any origin presenting a valid MPP
 challenge can charge it without a prompt or spend cap. To restrict payments,
 set an exact, comma-separated allowlist:
@@ -46,13 +49,29 @@ supported MPP challenges automatically.
 ## Behavior
 
 - Existing and future sync and async clients retain their transport, pool,
-  cookies, hooks, redirects, extensions, and streaming behavior.
+  cookies, hooks, redirects, extensions, and streaming behavior. Response hooks
+  observe the final logical response rather than the internal `402`.
 - Free responses pass through. Malformed, unsupported, and disallowed
   challenges remain ordinary `402` responses.
 - A paid request is retried at most once. Distinct payments are serialized;
   equivalent, repeated, and uncertain attempts fail closed.
+- `mpp_fetch` blocks private-network redirects, hides sensitive response headers,
+  and truncates large bodies.
 - Only HTTPX traffic in the Hermes process is instrumented. Shell commands and
   Requests, aiohttp, or urllib3 are not; use `mpp_fetch` for arbitrary HTTP.
+
+If a payment outcome is uncertain, verify the wallet transaction before
+restarting Hermes; later payments remain blocked in that process.
+
+## Manage
+
+```sh
+hermes plugins list
+uvx --refresh hermes-mpp install  # update or reconfigure
+uvx hermes-mpp uninstall
+```
+
+Uninstalling leaves the private key in Hermes's `.env` file.
 
 ## Develop
 
