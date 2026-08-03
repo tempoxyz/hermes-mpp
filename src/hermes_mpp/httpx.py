@@ -151,7 +151,7 @@ class HttpxInstrumentation:
                 failure = cause
                 error = _run_async(lambda: self._fail_sent(prepared, failure))
                 raise error from cause
-            return _run_async(lambda: self._finish(prepared, payment_response, asynchronous=False))
+            return _run_async(lambda: self._finish(prepared, payment_response))
 
         @wraps(self._async_original)
         async def async_send(
@@ -186,7 +186,7 @@ class HttpxInstrumentation:
             except (Exception, asyncio.CancelledError) as cause:
                 error = await self._fail_sent(prepared, cause)
                 raise error from cause
-            return await self._finish(prepared, payment_response, asynchronous=True)
+            return await self._finish(prepared, payment_response)
 
         self._sync_wrapper = sync_send
         self._async_wrapper = async_send
@@ -249,7 +249,13 @@ class HttpxInstrumentation:
         try:
             await _read(response, asynchronous)
             credential = await _create_credential(runtime, match, request, response)
-            retry = _retry(request, content, credential, cookies)
+            retry = _retry(
+                request,
+                content,
+                credential,
+                cookies,
+                _changed_cookies(response),
+            )
         except BaseException as error:
             self._ledger.complete(attempt)
             await _close_quietly(response, asynchronous)
@@ -294,10 +300,8 @@ class HttpxInstrumentation:
         self,
         prepared: _Prepared,
         payment_response: httpx.Response,
-        *,
-        asynchronous: bool,
     ) -> httpx.Response:
-        if not payment_response.is_success:
+        if payment_response.is_error:
             assert prepared.match.challenge is not None
             cause = RuntimeError(f"Paid retry returned HTTP {payment_response.status_code}")
             error = _unknown(
@@ -307,27 +311,23 @@ class HttpxInstrumentation:
                 cause,
             )
             self._ledger.uncertain(prepared.attempt, error)
-            try:
-                await _emit_failed(
-                    prepared.runtime,
-                    prepared.match,
-                    prepared.request,
-                    payment_response,
-                    error,
-                    prepared.credential,
-                )
-            finally:
-                await _close_quietly(payment_response, asynchronous)
-            raise error from cause
-
-        self._ledger.complete(prepared.attempt)
-        await _emit_response(
-            prepared.runtime,
-            prepared.match,
-            prepared.credential,
-            prepared.request,
-            payment_response,
-        )
+            await _emit_failed(
+                prepared.runtime,
+                prepared.match,
+                prepared.request,
+                payment_response,
+                error,
+                prepared.credential,
+            )
+        else:
+            self._ledger.complete(prepared.attempt)
+            await _emit_response(
+                prepared.runtime,
+                prepared.match,
+                prepared.credential,
+                prepared.request,
+                payment_response,
+            )
         return payment_response
 
     def enable(self) -> None:
@@ -514,6 +514,7 @@ def _retry(
     content: bytes,
     credential: Credential,
     cookies: httpx.Cookies,
+    changed_cookies: set[str],
 ) -> httpx.Request:
     headers = httpx.Headers(request.headers)
     headers["Authorization"] = credential.to_authorization()
@@ -527,18 +528,30 @@ def _retry(
     )
     httpx.Cookies(cookies).set_cookie_header(retry)
     original_cookie = request.headers.get("Cookie")
-    updated_cookie = retry.headers.get("Cookie")
-    if original_cookie and updated_cookie:
-        updated_names = {part.partition("=")[0].strip() for part in updated_cookie.split(";")}
-        preserved = [
-            part.strip()
-            for part in original_cookie.split(";")
-            if part.partition("=")[0].strip() not in updated_names
-        ]
-        retry.headers["Cookie"] = "; ".join([*preserved, updated_cookie])
-    elif original_cookie:
-        retry.headers["Cookie"] = original_cookie
+    updated_cookie = retry.headers.pop("Cookie", None)
+    replaced = _cookie_names(updated_cookie) | changed_cookies
+    merged = [
+        part.strip()
+        for part in (original_cookie or "").split(";")
+        if part.strip() and part.partition("=")[0].strip() not in replaced
+    ]
+    if updated_cookie:
+        merged.append(updated_cookie)
+    if merged:
+        retry.headers["Cookie"] = "; ".join(merged)
     return retry
+
+
+def _cookie_names(value: str | None) -> set[str]:
+    return {part.partition("=")[0].strip() for part in (value or "").split(";") if part.strip()}
+
+
+def _changed_cookies(response: httpx.Response) -> set[str]:
+    return {
+        value.partition("=")[0].strip()
+        for value in response.headers.get_list("set-cookie")
+        if "=" in value
+    }
 
 
 def _unknown(
