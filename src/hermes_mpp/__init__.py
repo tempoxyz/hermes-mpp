@@ -6,11 +6,13 @@ import atexit
 import threading
 from typing import Any
 
-from mpp.methods.tempo import ChargeIntent, TempoAccount, tempo
+from mpp.methods.tempo import TempoAccount
 from mpp.runtime import PaymentRuntime
 
 from .config import Config
 from .httpx import HttpxInstrumentation, instrument_httpx
+from .tempo import ChallengeTempo
+from .tool import register_tool
 
 _instrumentation: HttpxInstrumentation | None = None
 _lock = threading.Lock()
@@ -20,24 +22,25 @@ def _create_instrumentation(config: Config) -> HttpxInstrumentation:
     account = TempoAccount.from_key(config.private_key)
 
     def runtime_factory() -> PaymentRuntime:
-        method = tempo(
-            account=account,
-            intents={"charge": ChargeIntent()},
-            rpc_url=config.rpc_url,
-            client_id="hermes-agent",
-        )
-        return PaymentRuntime([method])
+        return PaymentRuntime([ChallengeTempo(account)])
 
     return instrument_httpx(runtime_factory, config.allowed_origins)
 
 
-def register(_ctx: Any) -> None:
-    """Instrument HTTPX once when Hermes loads the plugin."""
+def register(ctx: Any) -> None:
+    """Make Hermes HTTP requests payment-aware."""
     global _instrumentation
     with _lock:
-        if _instrumentation is not None and _instrumentation.active:
-            return
-        _instrumentation = _create_instrumentation(Config.from_env())
+        instrumentation = _instrumentation
+        if instrumentation is None or not instrumentation.active:
+            instrumentation = _create_instrumentation(Config.from_env())
+        try:
+            register_tool(ctx)
+        except BaseException:
+            instrumentation.close()
+            _instrumentation = None
+            raise
+        _instrumentation = instrumentation
 
 
 def _shutdown() -> None:

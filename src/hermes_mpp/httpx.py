@@ -8,7 +8,10 @@ import threading
 from collections.abc import Awaitable, Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from functools import wraps
+from http.cookies import CookieError, Morsel, SimpleCookie
 from typing import Any
 
 import httpx
@@ -106,7 +109,7 @@ class _Prepared:
 class HttpxInstrumentation:
     """Restorable process-global HTTPX 0.27–0.28 instrumentation."""
 
-    def __init__(self, runtime_factory: RuntimeFactory, origins: Sequence[str]) -> None:
+    def __init__(self, runtime_factory: RuntimeFactory, origins: Sequence[str] | None) -> None:
         _validate_httpx()
         self._runtime_factory = runtime_factory
         self._origins = _parse_origins(origins)
@@ -200,12 +203,11 @@ class HttpxInstrumentation:
         request: httpx.Request,
         response: httpx.Response,
     ) -> bool:
-        return (
-            not _BYPASS.get()
-            and _origin(request.url) in self._origins
-            and response.status_code == 402
+        allowed = self._origins is None or (
+            _origin(request.url) in self._origins
             and _origin(response.request.url) in self._origins
         )
+        return not _BYPASS.get() and allowed and response.status_code == 402
 
     async def _prepare_402(
         self,
@@ -373,7 +375,7 @@ class HttpxInstrumentation:
 
 def instrument_httpx(
     runtime_factory: RuntimeFactory,
-    origins: Sequence[str],
+    origins: Sequence[str] | None,
 ) -> HttpxInstrumentation:
     instrumentation = HttpxInstrumentation(runtime_factory, origins)
     instrumentation.enable()
@@ -547,11 +549,40 @@ def _cookie_names(value: str | None) -> set[str]:
 
 
 def _changed_cookies(response: httpx.Response) -> set[str]:
-    return {
-        value.partition("=")[0].strip()
-        for value in response.headers.get_list("set-cookie")
-        if "=" in value
-    }
+    request = httpx.Request("GET", response.request.url)
+    response.cookies.set_cookie_header(request)
+    names = _cookie_names(request.headers.get("cookie"))
+    for value in response.headers.get_list("set-cookie"):
+        cookies = SimpleCookie()
+        try:
+            cookies.load(value)
+        except CookieError:
+            continue
+        for cookie in cookies.values():
+            if not _deletes_cookie(cookie):
+                continue
+            cookie["expires"] = cookie["max-age"] = ""
+            synthetic = httpx.Response(
+                200,
+                headers={"set-cookie": cookie.OutputString()},
+                request=response.request,
+            )
+            probe = httpx.Request("GET", response.request.url)
+            synthetic.cookies.set_cookie_header(probe)
+            names.update(_cookie_names(probe.headers.get("cookie")))
+    return names
+
+
+def _deletes_cookie(cookie: Morsel[str]) -> bool:
+    try:
+        if cookie["max-age"] and int(cookie["max-age"]) <= 0:
+            return True
+        expires = parsedate_to_datetime(cookie["expires"])
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=UTC)
+        return expires <= datetime.now(UTC)
+    except (TypeError, ValueError):
+        return False
 
 
 def _unknown(
@@ -602,7 +633,9 @@ def _origin(url: httpx.URL) -> Origin:
     return url.scheme, url.host, url.port
 
 
-def _parse_origins(values: Sequence[str]) -> frozenset[Origin]:
+def _parse_origins(values: Sequence[str] | None) -> frozenset[Origin] | None:
+    if values is None:
+        return None
     if isinstance(values, str):
         raise TypeError("origins must be a sequence of strings")
     origins: set[Origin] = set()

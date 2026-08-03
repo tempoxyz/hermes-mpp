@@ -15,6 +15,9 @@ dependencies = [
     "pympp[tempo]>=0.10,<0.11",
 ]
 
+[project.scripts]
+hermes-mpp = "hermes_mpp.cli:main"
+
 [project.entry-points."hermes_agent.plugins"]
 mpp = "hermes_mpp"
 

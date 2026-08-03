@@ -4,6 +4,7 @@ import inspect
 from pathlib import Path
 
 import httpx
+import pytest
 
 import hermes_mpp
 
@@ -25,7 +26,7 @@ def test_real_hermes_entrypoint_load_is_idempotent(
     monkeypatch.setenv("HERMES_HOME", str(home))
     monkeypatch.setenv("HERMES_BUNDLED_PLUGINS", str(bundled))
     monkeypatch.setenv("TEMPO_PRIVATE_KEY", TEST_PRIVATE_KEY)
-    monkeypatch.setenv("MPP_ALLOWED_ORIGINS", "https://allowed.test")
+    monkeypatch.delenv("MPP_ALLOWED_ORIGINS", raising=False)
 
     from hermes_cli.plugins import PluginManager
 
@@ -34,7 +35,7 @@ def test_real_hermes_entrypoint_load_is_idempotent(
     loaded = manager._plugins["mpp"]
     assert loaded.enabled, loaded.error
     assert loaded.manifest.source == "entrypoint"
-    assert loaded.tools_registered == []
+    assert loaded.tools_registered == ["mpp_fetch"]
     assert loaded.hooks_registered == []
     assert loaded.commands_registered == []
     assert loaded.middleware_registered == []
@@ -50,3 +51,18 @@ def test_real_hermes_entrypoint_load_is_idempotent(
         inspect.getattr_static(httpx.Client, "_send_handling_redirects")
         is instrumentation._sync_original
     )
+
+
+def test_registration_failure_restores_httpx(monkeypatch) -> None:
+    class Context:
+        def register_tool(self, **_kwargs) -> None:
+            raise RuntimeError("conflict")
+
+    monkeypatch.setenv("TEMPO_PRIVATE_KEY", TEST_PRIVATE_KEY)
+    original = inspect.getattr_static(httpx.Client, "_send_handling_redirects")
+
+    with pytest.raises(RuntimeError, match="conflict"):
+        hermes_mpp.register(Context())
+
+    assert hermes_mpp._instrumentation is None
+    assert inspect.getattr_static(httpx.Client, "_send_handling_redirects") is original

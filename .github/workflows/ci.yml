@@ -34,6 +34,8 @@ jobs:
           uv run --no-sync python -c
           "from importlib.metadata import entry_points;
           next(iter(entry_points(group='hermes_agent.plugins', name='mpp'))).load()"
+      - if: matrix.python == '3.13'
+        run: uv run --no-sync hermes-mpp --help
 
   httpx:
     runs-on: ubuntu-latest
@@ -48,4 +50,4 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - run: uv pip install "httpx==${{ matrix.httpx }}"
-      - run: uv run --no-sync pytest tests/test_config.py tests/test_httpx.py
+      - run: uv run --no-sync pytest
