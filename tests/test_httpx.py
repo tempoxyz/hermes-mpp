@@ -170,6 +170,30 @@ def test_paid_retry_uses_updated_client_cookies() -> None:
     instrumentation.close()
 
 
+def test_paid_retry_honors_challenge_cookie_deletion() -> None:
+    _, _, instrumentation = setup()
+    cookies: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        cookies.append(request.headers.get("cookie", ""))
+        if "authorization" in request.headers:
+            return httpx.Response(200)
+        response = required("deleted-cookie")
+        response.headers["set-cookie"] = "session=; Max-Age=0; Path=/"
+        return response
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        client.cookies.set("session", "old", domain="allowed.test", path="/")
+        response = client.get(
+            f"{ALLOWED}/cookies",
+            headers={"cookie": "manual=yes; session=old"},
+        )
+
+    assert response.status_code == 200
+    assert cookies == ["manual=yes; session=old", "manual=yes"]
+    instrumentation.close()
+
+
 def test_origin_policy_includes_redirect_target() -> None:
     method, _, instrumentation = setup()
     requests: list[httpx.Request] = []
@@ -249,6 +273,22 @@ def test_paid_retry_can_follow_a_redirect() -> None:
     instrumentation.close()
 
 
+def test_paid_retry_returns_redirect_when_following_is_disabled() -> None:
+    _, _, instrumentation = setup()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "authorization" in request.headers:
+            return httpx.Response(302, headers={"location": "/done"})
+        return required("paid-no-follow")
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        response = client.get(f"{ALLOWED}/paid", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/done"
+    instrumentation.close()
+
+
 def test_method_internal_httpx_is_not_instrumented_recursively() -> None:
     internal: list[httpx.Request] = []
 
@@ -289,8 +329,7 @@ def test_repeated_challenge_and_later_retry_fail_closed() -> None:
         return required("repeated")
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(PaymentOutcomeUnknownError):
-            client.get(f"{ALLOWED}/repeated")
+        assert client.get(f"{ALLOWED}/repeated").status_code == 402
         with pytest.raises(PaymentOutcomeUnknownError):
             client.get(f"{ALLOWED}/repeated")
 
@@ -306,12 +345,13 @@ def test_non_success_paid_response_stays_uncertain() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if "authorization" in request.headers:
-            return httpx.Response(500)
+            return httpx.Response(500, text="failed")
         return required(f"failed-{len(requests)}")
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(PaymentOutcomeUnknownError):
-            client.get(f"{ALLOWED}/failed")
+        response = client.get(f"{ALLOWED}/failed")
+        assert response.status_code == 500
+        assert response.text == "failed"
         with pytest.raises(PaymentOutcomeUnknownError):
             client.get(f"{ALLOWED}/failed")
 

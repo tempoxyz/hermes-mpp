@@ -26,9 +26,6 @@ dev = [
     "ruff>=0.15",
 ]
 
-[tool.uv.sources]
-pympp = { git = "https://github.com/tempoxyz/pympp.git", rev = "4d47c66667c7dbf69fc3870f3c67cefcc6ba4648" }
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/hermes_mpp"]
 
