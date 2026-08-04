@@ -49,7 +49,7 @@ class _Ledger:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._gate = threading.Lock()
-        self._entries: dict[tuple[Any, ...], _Attempt | PaymentOutcomeUnknownError] = {}
+        self._entries: dict[tuple[Any, ...], _Attempt] = {}
         self._uncertain: PaymentOutcomeUnknownError | None = None
 
     async def begin(self, challenge: Challenge, request: httpx.Request) -> _Attempt:
@@ -59,9 +59,7 @@ class _Ledger:
                 raise self._uncertain
             for key in attempt.keys:
                 existing = self._entries.get(key)
-                if isinstance(existing, PaymentOutcomeUnknownError):
-                    raise existing
-                if isinstance(existing, _Attempt):
+                if existing is not None:
                     raise PaymentOutcomeUnknownError(
                         existing.challenge,
                         RuntimeError("A matching payment is already in progress"),
@@ -97,16 +95,17 @@ class _Ledger:
     ) -> None:
         with self._lock:
             self._uncertain = error
-            for key in attempt.keys:
-                self._entries[key] = error
-            self._release(attempt)
+            self._remove(attempt)
 
     def complete(self, attempt: _Attempt) -> None:
         with self._lock:
-            for key in attempt.keys:
-                if self._entries.get(key) is attempt:
-                    self._entries.pop(key)
-            self._release(attempt)
+            self._remove(attempt)
+
+    def _remove(self, attempt: _Attempt) -> None:
+        for key in attempt.keys:
+            if self._entries.get(key) is attempt:
+                self._entries.pop(key)
+        self._release(attempt)
 
     def _release(self, attempt: _Attempt) -> None:
         if attempt.holds_gate:
@@ -287,6 +286,14 @@ class HttpxInstrumentation:
         prepared: _Prepared,
         cause: BaseException,
     ) -> PaymentOutcomeUnknownError:
+        return await self._mark_uncertain(prepared, prepared.response, cause)
+
+    async def _mark_uncertain(
+        self,
+        prepared: _Prepared,
+        response: httpx.Response,
+        cause: BaseException,
+    ) -> PaymentOutcomeUnknownError:
         assert prepared.match.challenge is not None
         error = _unknown(
             prepared.match.challenge,
@@ -299,7 +306,7 @@ class HttpxInstrumentation:
             prepared.runtime,
             prepared.match,
             prepared.request,
-            prepared.response,
+            response,
             error,
             prepared.credential,
         )
@@ -311,22 +318,10 @@ class HttpxInstrumentation:
         payment_response: httpx.Response,
     ) -> httpx.Response:
         if payment_response.is_error:
-            assert prepared.match.challenge is not None
-            cause = RuntimeError(f"Paid retry returned HTTP {payment_response.status_code}")
-            error = _unknown(
-                prepared.match.challenge,
-                prepared.credential,
-                prepared.request,
-                cause,
-            )
-            self._ledger.uncertain(prepared.attempt, error)
-            await _emit_failed(
-                prepared.runtime,
-                prepared.match,
-                prepared.request,
+            await self._mark_uncertain(
+                prepared,
                 payment_response,
-                error,
-                prepared.credential,
+                RuntimeError(f"Paid retry returned HTTP {payment_response.status_code}"),
             )
         else:
             self._ledger.complete(prepared.attempt)

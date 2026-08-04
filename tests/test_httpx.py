@@ -83,7 +83,7 @@ def assert_paid(requests: list[httpx.Request]) -> None:
 def test_sync_async_preexisting_and_events() -> None:
     preexisting_requests: list[httpx.Request] = []
     preexisting = httpx.Client(transport=paid_handler("preexisting", preexisting_requests))
-    method, events, instrumentation = setup()
+    method, events, _ = setup()
     names: list[str] = []
     events.on(WILDCARD_EVENT, lambda event: names.append(str(event.name)))
 
@@ -106,7 +106,6 @@ def test_sync_async_preexisting_and_events() -> None:
     assert names.count("credential.created") == 3
     assert names.count("payment.response") == 3
 
-    instrumentation.close()
     preexisting.close()
 
 
@@ -122,13 +121,12 @@ def test_sync_response_hook_observes_only_paid_response() -> None:
         transport=paid_handler("sync-hook", requests),
         event_hooks={"response": [hook]},
     ) as client:
-        method, _, instrumentation = setup()
+        method, _, _ = setup()
         assert client.get(f"{ALLOWED}/hook").status_code == 200
 
     assert_paid(requests)
     assert statuses == [200]
     assert method.calls == 1
-    instrumentation.close()
 
 
 @pytest.mark.asyncio
@@ -144,18 +142,17 @@ async def test_async_response_hook_observes_only_paid_response() -> None:
         transport=paid_handler("async-hook", requests),
         event_hooks={"response": [hook]},
     ) as client:
-        method, _, instrumentation = setup()
+        method, _, _ = setup()
         assert (await client.get(f"{ALLOWED}/hook")).status_code == 200
 
     assert_paid(requests)
     assert statuses == [200]
     assert method.calls == 1
-    instrumentation.close()
 
 
 @pytest.mark.asyncio
 async def test_sync_client_called_from_running_loop() -> None:
-    method, _, instrumentation = setup()
+    method, _, _ = setup()
     requests: list[httpx.Request] = []
     threads: list[int] = []
 
@@ -170,11 +167,10 @@ async def test_sync_client_called_from_running_loop() -> None:
     assert_paid(requests)
     assert threads == [caller, caller]
     assert method.calls == 1
-    instrumentation.close()
 
 
 def test_paid_retry_uses_updated_client_cookies() -> None:
-    method, _, instrumentation = setup()
+    method, _, _ = setup()
     cookies: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -210,11 +206,10 @@ def test_paid_retry_uses_updated_client_cookies() -> None:
     assert asyncio.run(send()) == 200
     assert cookies == ["manual=yes; session=old", "manual=yes; session=new"] * 2
     assert method.calls == 2
-    instrumentation.close()
 
 
 def test_paid_retry_honors_challenge_cookie_deletion() -> None:
-    _, _, instrumentation = setup()
+    setup()
     cookies: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -234,7 +229,6 @@ def test_paid_retry_honors_challenge_cookie_deletion() -> None:
 
     assert response.status_code == 200
     assert cookies == ["manual=yes; session=old", "manual=yes"]
-    instrumentation.close()
 
 
 @pytest.mark.parametrize(
@@ -251,7 +245,7 @@ def test_scoped_cookie_update_does_not_remove_manual_cookie(
     set_cookie: str,
 ) -> None:
     method = FakeMethod()
-    instrumentation = instrument_httpx(
+    instrument_httpx(
         lambda: PaymentRuntime([method]),
         [url.removesuffix("/paid")],
     )
@@ -269,11 +263,10 @@ def test_scoped_cookie_update_does_not_remove_manual_cookie(
         assert client.get(url, headers={"cookie": "session=manual"}).status_code == 200
 
     assert cookies == ["session=manual", "session=manual"]
-    instrumentation.close()
 
 
 def test_origin_policy_includes_redirect_target() -> None:
-    method, _, instrumentation = setup()
+    method, _, _ = setup()
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -294,12 +287,11 @@ def test_origin_policy_includes_redirect_target() -> None:
     assert len(requests) == 2
     assert method.calls == 0
     assert all("authorization" not in request.headers for request in requests)
-    instrumentation.close()
 
 
 def test_missing_origin_policy_allows_any_origin() -> None:
     method = FakeMethod()
-    instrumentation = instrument_httpx(lambda: PaymentRuntime([method]), None)
+    instrument_httpx(lambda: PaymentRuntime([method]), None)
     requests: list[httpx.Request] = []
 
     with httpx.Client(transport=paid_handler("anywhere", requests)) as client:
@@ -307,11 +299,10 @@ def test_missing_origin_policy_allows_any_origin() -> None:
 
     assert_paid(requests)
     assert method.calls == 1
-    instrumentation.close()
 
 
 def test_same_origin_redirect_retries_the_challenged_url() -> None:
-    _, _, instrumentation = setup()
+    setup()
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -334,11 +325,10 @@ def test_same_origin_redirect_retries_the_challenged_url() -> None:
         "/paid",
     ]
     assert "authorization" in requests[-1].headers
-    instrumentation.close()
 
 
 def test_paid_retry_can_follow_a_redirect() -> None:
-    _, _, instrumentation = setup()
+    setup()
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -361,11 +351,10 @@ def test_paid_retry_can_follow_a_redirect() -> None:
         "/done",
     ]
     assert "authorization" in requests[1].headers
-    instrumentation.close()
 
 
 def test_paid_retry_returns_redirect_when_following_is_disabled() -> None:
-    _, _, instrumentation = setup()
+    setup()
 
     def handler(request: httpx.Request) -> httpx.Response:
         if "authorization" in request.headers:
@@ -377,7 +366,6 @@ def test_paid_retry_returns_redirect_when_following_is_disabled() -> None:
 
     assert response.status_code == 302
     assert response.headers["location"] == "/done"
-    instrumentation.close()
 
 
 def test_method_internal_httpx_is_not_instrumented_recursively() -> None:
@@ -397,7 +385,7 @@ def test_method_internal_httpx_is_not_instrumented_recursively() -> None:
             return await super().create_credential(challenge)
 
     method = RecursiveMethod()
-    instrumentation = instrument_httpx(
+    instrument_httpx(
         lambda: PaymentRuntime([method]),
         [ALLOWED],
     )
@@ -408,11 +396,10 @@ def test_method_internal_httpx_is_not_instrumented_recursively() -> None:
     assert len(internal) == 1
     assert "authorization" not in internal[0].headers
     assert method.calls == 1
-    instrumentation.close()
 
 
 def test_repeated_challenge_and_later_retry_fail_closed() -> None:
-    method, _, instrumentation = setup()
+    method, _, _ = setup()
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -426,11 +413,10 @@ def test_repeated_challenge_and_later_retry_fail_closed() -> None:
 
     assert len(requests) == 3
     assert method.calls == 1
-    instrumentation.close()
 
 
 def test_non_success_paid_response_stays_uncertain() -> None:
-    method, _, instrumentation = setup()
+    method, _, _ = setup()
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -448,11 +434,10 @@ def test_non_success_paid_response_stays_uncertain() -> None:
 
     assert len(requests) == 3
     assert method.calls == 1
-    instrumentation.close()
 
 
 def test_lost_paid_response_blocks_later_wallet_payments() -> None:
-    method, _, instrumentation = setup()
+    method, _, _ = setup()
     requests: list[httpx.Request] = []
 
     def lost(request: httpx.Request) -> httpx.Response:
@@ -472,11 +457,10 @@ def test_lost_paid_response_blocks_later_wallet_payments() -> None:
 
     assert len(requests) == 3
     assert method.calls == 1
-    instrumentation.close()
 
 
 def test_concurrent_equivalent_payment_is_not_sent_twice() -> None:
-    method, _, instrumentation = setup()
+    method, _, _ = setup()
     paid = threading.Event()
     release = threading.Event()
 
@@ -501,11 +485,10 @@ def test_concurrent_equivalent_payment_is_not_sent_twice() -> None:
         assert first.result(timeout=5) == 200
 
     assert method.calls == 1
-    instrumentation.close()
 
 
 def test_distinct_payments_are_serialized() -> None:
-    method, _, instrumentation = setup()
+    method, _, _ = setup()
     first_paid = threading.Event()
     second_paid = threading.Event()
     release = threading.Event()
@@ -533,7 +516,6 @@ def test_distinct_payments_are_serialized() -> None:
         assert first.result(timeout=5) == second.result(timeout=5) == 200
 
     assert method.calls == 2
-    instrumentation.close()
 
 
 def test_close_restores_patches_without_interrupting_inflight_payment() -> None:
@@ -564,7 +546,7 @@ def test_close_restores_patches_without_interrupting_inflight_payment() -> None:
 
 
 def test_streaming_request_cannot_be_replayed() -> None:
-    _, _, instrumentation = setup()
+    setup()
 
     class Stream(httpx.SyncByteStream):
         def __iter__(self) -> Any:
@@ -581,12 +563,11 @@ def test_streaming_request_cannot_be_replayed() -> None:
                 httpx.Request("POST", f"{ALLOWED}/stream", stream=Stream()),
                 stream=True,
             )
-    instrumentation.close()
 
 
 @pytest.mark.asyncio
 async def test_async_streaming_request_cannot_be_replayed() -> None:
-    _, _, instrumentation = setup()
+    setup()
 
     class Stream(httpx.AsyncByteStream):
         async def __aiter__(self) -> Any:
@@ -610,7 +591,6 @@ async def test_async_streaming_request_cannot_be_replayed() -> None:
                 ),
                 stream=True,
             )
-    instrumentation.close()
 
 
 def test_runtime_factory_failure_closes_challenge_response() -> None:
@@ -635,13 +615,12 @@ def test_runtime_factory_failure_closes_challenge_response() -> None:
     def fail() -> PaymentRuntime:
         raise RuntimeError("factory failed")
 
-    instrumentation = instrument_httpx(fail, [ALLOWED])
+    instrument_httpx(fail, [ALLOWED])
     with httpx.Client(transport=Transport()) as client:
         with pytest.raises(RuntimeError, match="factory failed"):
             client.get(f"{ALLOWED}/factory")
 
     assert closed.is_set()
-    instrumentation.close()
 
 
 @pytest.mark.parametrize(
