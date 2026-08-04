@@ -7,6 +7,7 @@ import os
 import secrets
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 from mpp.methods.tempo import TempoAccount
@@ -16,13 +17,69 @@ def _hermes_home() -> Path:
     return Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes")).expanduser()
 
 
-def _hermes_bin(home: Path, name: str) -> Path:
+def _bin(directory: Path, name: str) -> Path:
     suffix = ".exe" if os.name == "nt" else ""
-    path = home / "hermes-agent" / "venv" / ("Scripts" if os.name == "nt" else "bin")
-    executable = path / f"{name}{suffix}"
-    if not executable.exists():
-        raise SystemExit("Hermes is not installed. Install Hermes first, then rerun this command.")
-    return executable
+    return directory / f"{name}{suffix}"
+
+
+@dataclass(frozen=True)
+class HermesInstallation:
+    python: Path
+    hermes: Path
+
+
+def _has_hermes(python: Path) -> bool:
+    if not python.is_file():
+        return False
+    try:
+        result = subprocess.run(
+            [str(python), "-c", "import hermes_cli"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def _from_python(python: Path) -> HermesInstallation | None:
+    python = python.expanduser().absolute()
+    hermes = _bin(python.parent, "hermes")
+    if hermes.is_file() and _has_hermes(python):
+        return HermesInstallation(python, hermes)
+    return None
+
+
+def _from_hermes(hermes: Path) -> HermesInstallation | None:
+    resolved = hermes.expanduser().resolve()
+    return _from_python(_bin(resolved.parent, "python"))
+
+
+def _hermes_installation(home: Path, override: str | None = None) -> HermesInstallation:
+    explicit = override or os.environ.get("HERMES_PYTHON")
+    if explicit:
+        installation = _from_python(Path(explicit))
+        if installation is None:
+            raise SystemExit(f"Hermes is not installed for Python: {explicit}")
+        return installation
+
+    command = shutil.which("hermes")
+    candidates = []
+    if command:
+        candidates.append(_from_hermes(Path(command)))
+
+    scripts = "Scripts" if os.name == "nt" else "bin"
+    candidates.append(_from_python(_bin(home / "hermes-agent" / "venv" / scripts, "python")))
+    if os.name != "nt":
+        candidates.append(_from_python(Path("/usr/local/lib/hermes-agent/venv/bin/python")))
+
+    for installation in candidates:
+        if installation is not None:
+            return installation
+    raise SystemExit(
+        "Hermes is not installed. Install Hermes or pass --hermes-python PATH."
+    )
 
 
 def _env_key(path: Path) -> str | None:
@@ -57,58 +114,69 @@ def _wallet(env_file: Path) -> TempoAccount:
     return account
 
 
-def install() -> None:
+def install(python_override: str | None = None) -> None:
     home = _hermes_home()
-    python = _hermes_bin(home, "python")
-    hermes = _hermes_bin(home, "hermes")
+    installation = _hermes_installation(home, python_override)
     uv = shutil.which("uv")
     if uv is None:
         raise SystemExit("uv is required to install hermes-mpp.")
 
     package = f"hermes-mpp=={importlib.metadata.version('hermes-mpp')}"
     subprocess.run(
-        [uv, "pip", "uninstall", "--python", str(python), "mpp-hermes"],
+        [uv, "pip", "uninstall", "--python", str(installation.python), "mpp-hermes"],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    subprocess.run([uv, "pip", "install", "--python", str(python), package], check=True)
+    subprocess.run(
+        [uv, "pip", "install", "--python", str(installation.python), package], check=True
+    )
     account = _wallet(home / ".env")
     subprocess.run(
-        [str(hermes), "plugins", "enable", "mpp", "--no-allow-tool-override"],
+        [str(installation.hermes), "plugins", "enable", "mpp", "--no-allow-tool-override"],
         check=True,
         env={**os.environ, "HERMES_HOME": str(home)},
     )
     print(f"Installed hermes-mpp. Wallet: {account.address}")
 
 
-def uninstall() -> None:
+def uninstall(python_override: str | None = None) -> None:
     home = _hermes_home()
-    python = _hermes_bin(home, "python")
-    hermes = _hermes_bin(home, "hermes")
+    installation = _hermes_installation(home, python_override)
     uv = shutil.which("uv")
     if uv is None:
         raise SystemExit("uv is required to uninstall hermes-mpp.")
 
     subprocess.run(
-        [str(hermes), "plugins", "disable", "mpp"],
+        [str(installation.hermes), "plugins", "disable", "mpp"],
         check=True,
         env={**os.environ, "HERMES_HOME": str(home)},
     )
-    subprocess.run([uv, "pip", "uninstall", "--python", str(python), "hermes-mpp"], check=True)
+    subprocess.run(
+        [uv, "pip", "uninstall", "--python", str(installation.python), "hermes-mpp"],
+        check=True,
+    )
     print("Uninstalled hermes-mpp. The wallet remains in Hermes's .env file.")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Manage hermes-mpp for Hermes Agent.")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("install", help="Install into Hermes and configure a wallet.")
-    subparsers.add_parser("uninstall", help="Disable and remove hermes-mpp from Hermes.")
+    for command, help_text in (
+        ("install", "Install into Hermes and configure a wallet."),
+        ("uninstall", "Disable and remove hermes-mpp from Hermes."),
+    ):
+        command_parser = subparsers.add_parser(command, help=help_text)
+        command_parser.add_argument(
+            "--hermes-python",
+            metavar="PATH",
+            help="Python executable used by Hermes (or set HERMES_PYTHON).",
+        )
     args = parser.parse_args()
     if args.command == "install":
-        install()
+        install(args.hermes_python)
     else:
-        uninstall()
+        uninstall(args.hermes_python)
 
 
 if __name__ == "__main__":

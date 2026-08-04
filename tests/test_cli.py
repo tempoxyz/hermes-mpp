@@ -63,7 +63,11 @@ def test_install_targets_hermes_and_enables_plugin(
 ) -> None:
     calls: list[tuple[list[str], dict]] = []
     monkeypatch.setattr(cli, "_hermes_home", lambda: tmp_path)
-    monkeypatch.setattr(cli, "_hermes_bin", lambda _, name: Path(f"/hermes/{name}"))
+    monkeypatch.setattr(
+        cli,
+        "_hermes_installation",
+        lambda *_: cli.HermesInstallation(Path("/hermes/python"), Path("/hermes/hermes")),
+    )
     monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/uv")
     monkeypatch.setattr(cli.importlib.metadata, "version", lambda _: "1.2.3")
     monkeypatch.setattr(cli, "_wallet", lambda _: SimpleNamespace(address="0xabc"))
@@ -108,7 +112,11 @@ def test_uninstall_disables_plugin_and_keeps_wallet(
 ) -> None:
     calls: list[tuple[list[str], dict]] = []
     monkeypatch.setattr(cli, "_hermes_home", lambda: tmp_path)
-    monkeypatch.setattr(cli, "_hermes_bin", lambda _, name: Path(f"/hermes/{name}"))
+    monkeypatch.setattr(
+        cli,
+        "_hermes_installation",
+        lambda *_: cli.HermesInstallation(Path("/hermes/python"), Path("/hermes/hermes")),
+    )
     monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/uv")
     monkeypatch.setattr(
         cli.subprocess,
@@ -130,3 +138,53 @@ def test_uninstall_disables_plugin_and_keeps_wallet(
     assert capsys.readouterr().out == (
         "Uninstalled hermes-mpp. The wallet remains in Hermes's .env file.\n"
     )
+
+
+def test_hermes_installation_prefers_path(tmp_path: Path, monkeypatch) -> None:
+    environment = tmp_path / "venv" / "bin"
+    environment.mkdir(parents=True)
+    python = environment / "python"
+    hermes = environment / "hermes"
+    python.touch()
+    hermes.touch()
+    launcher = tmp_path / "hermes"
+    launcher.symlink_to(hermes)
+    monkeypatch.delenv("HERMES_PYTHON", raising=False)
+    monkeypatch.setattr(
+        cli.shutil, "which", lambda name: str(launcher) if name == "hermes" else None
+    )
+    monkeypatch.setattr(cli, "_has_hermes", lambda candidate: candidate == python.resolve())
+
+    assert cli._hermes_installation(tmp_path) == cli.HermesInstallation(
+        python.resolve(), hermes.resolve()
+    )
+
+
+def test_hermes_installation_accepts_override(tmp_path: Path, monkeypatch) -> None:
+    environment = tmp_path / "venv" / "bin"
+    environment.mkdir(parents=True)
+    python = environment / "python"
+    hermes = environment / "hermes"
+    python.touch()
+    hermes.touch()
+    monkeypatch.setattr(cli, "_has_hermes", lambda candidate: candidate == python.resolve())
+
+    assert cli._hermes_installation(tmp_path, str(python)) == cli.HermesInstallation(
+        python.resolve(), hermes.resolve()
+    )
+
+
+def test_hermes_installation_falls_back_to_managed_venv(
+    tmp_path: Path, monkeypatch
+) -> None:
+    environment = tmp_path / "hermes-agent" / "venv" / "bin"
+    environment.mkdir(parents=True)
+    python = environment / "python"
+    hermes = environment / "hermes"
+    python.touch()
+    hermes.touch()
+    monkeypatch.delenv("HERMES_PYTHON", raising=False)
+    monkeypatch.setattr(cli.shutil, "which", lambda _: None)
+    monkeypatch.setattr(cli, "_has_hermes", lambda candidate: candidate == python)
+
+    assert cli._hermes_installation(tmp_path) == cli.HermesInstallation(python, hermes)

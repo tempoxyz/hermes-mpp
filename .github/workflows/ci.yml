@@ -25,17 +25,27 @@ jobs:
       - run: uv run pytest
       - if: matrix.python == '3.13'
         run: uv run ruff check .
-      - if: matrix.python == '3.13'
-        run: uv build --no-sources
-      - if: matrix.python == '3.13'
-        run: uv pip install --reinstall --no-deps dist/*.whl
-      - if: matrix.python == '3.13'
-        run: >-
-          uv run --no-sync python -c
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv build --no-sources
+      - run: >-
+          uvx --isolated --no-cache --from dist/*.whl python -c
+          "import importlib.util;
+          assert importlib.util.find_spec('hermes_cli') is None;
+          import hermes_mpp.cli"
+      - run: >-
+          uvx --isolated --no-cache --from dist/*.whl
+          --with hermes-agent==0.19.0 python -c
           "from importlib.metadata import entry_points;
           next(iter(entry_points(group='hermes_agent.plugins', name='mpp'))).load()"
-      - if: matrix.python == '3.13'
-        run: uv run --no-sync hermes-mpp --help
+      - run: uvx --isolated --no-cache --from dist/*.whl hermes-mpp --help
 
   httpx:
     runs-on: ubuntu-latest
