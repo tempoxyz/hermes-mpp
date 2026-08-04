@@ -34,6 +34,9 @@ set an exact, comma-separated allowlist:
 MPP_ALLOWED_ORIGINS=https://mpp.dev,https://api.example.com
 ```
 
+Paths and wildcards are rejected. Use plaintext `http://` only for trusted local
+development; an on-path attacker can inject a payment challenge.
+
 ## Use
 
 Ask Hermes for the resource normally:
