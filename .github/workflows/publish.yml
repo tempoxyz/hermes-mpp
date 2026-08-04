@@ -27,5 +27,6 @@ jobs:
           ecosystem: python
           python-version: '3.12'
           conventional-commit: true
+          post-version-command: uv lock
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

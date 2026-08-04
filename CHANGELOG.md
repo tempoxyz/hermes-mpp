@@ -4,5 +4,4 @@
 
 ### Patch Changes
 
-- Make the installer work from isolated environments and discover standard Hermes installations. (by @ParvAhuja, [#8](https://github.com/tempoxyz/hermes-mpp/pull/8))
-
+- Make the installer work from isolated environments and discover standard Hermes installations. (by @ParvAhuja, [#7](https://github.com/tempoxyz/hermes-mpp/pull/7))
