@@ -23,7 +23,7 @@ The installer discovers standard, root, and `PATH`-based Hermes installations.
 For a custom environment, run `uvx hermes-mpp install --hermes-python PATH` or
 set `HERMES_PYTHON`.
 
-Generated wallets start empty. For Moderato resources, fund the printed address
+Generated wallets start empty. For testnet resources, fund the printed address
 with the [Tempo faucet](https://docs.tempo.xyz/guide/use-accounts/add-funds).
 
 Use a dedicated, low-balance key. By default, any origin presenting a valid MPP
