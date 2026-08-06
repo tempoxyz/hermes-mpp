@@ -129,4 +129,5 @@ uv run pytest
 uv run ruff check .
 ```
 
-CI tests Python 3.11–3.13 and HTTPX 0.27–0.28.
+CI tests Python 3.11–3.13 and HTTPX 0.27–0.28. It also runs the suite against
+a pinned Hermes main snapshot so private-seam compatibility drift is explicit.
