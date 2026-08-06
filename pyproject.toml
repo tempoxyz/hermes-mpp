@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "hermes-mpp"
 version = "0.1.1"
-description = "Transparent MPP payments for Hermes Agent HTTP traffic"
+description = "Transparent MPP payments for Hermes Agent HTTP and MCP traffic"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = "MIT"
@@ -26,7 +26,7 @@ mpp = "hermes_mpp"
 
 [dependency-groups]
 dev = [
-    "hermes-agent==0.19.0",
+    "hermes-agent[mcp]==0.19.0",
     "pytest>=8",
     "pytest-asyncio>=0.24",
     "ruff>=0.15",
