@@ -12,7 +12,7 @@ license = "MIT"
 authors = [{ name = "Tempo" }]
 dependencies = [
     "httpx>=0.27,<0.29",
-    "pympp[tempo]>=0.10,<0.11",
+    "pympp[tempo] @ git+https://github.com/tempoxyz/pympp.git@1881727275d11415fdb424781eeaaeff1e7f2f5f",
 ]
 
 [project.urls]
@@ -34,6 +34,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hermes_mpp"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.pytest.ini_options]
 addopts = "-q"

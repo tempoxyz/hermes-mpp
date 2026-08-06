@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import getpass
 import importlib.metadata
 import os
@@ -10,7 +11,13 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
 from mpp.methods.tempo import TempoAccount
+from mpp.methods.tempo.session import SQLiteSessionStore
+from mpp.methods.tempo.session.transport import SessionPaymentTransport
+
+from .config import Config
+from .session import SessionHost
 
 
 def _hermes_home() -> Path:
@@ -114,6 +121,86 @@ def _wallet(env_file: Path) -> TempoAccount:
     return account
 
 
+def _session_db(home: Path) -> Path:
+    return Path(
+        os.environ.get("MPP_SESSION_DB", str(home / "mpp-sessions.sqlite3"))
+    ).expanduser()
+
+
+def _session_config(home: Path) -> Config:
+    values = dict(os.environ)
+    values["HERMES_HOME"] = str(home)
+    if not values.get("TEMPO_PRIVATE_KEY", "").strip():
+        private_key = _env_key(home / ".env")
+        if private_key is not None:
+            values["TEMPO_PRIVATE_KEY"] = private_key
+    try:
+        return Config.from_env(values)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+
+
+def list_sessions() -> None:
+    """Print the durable Tempo sessions known to Hermes."""
+
+    store = SQLiteSessionStore(_session_db(_hermes_home()))
+    try:
+        records = asyncio.run(store.list())
+    finally:
+        store.close()
+    if not records:
+        print("No Tempo sessions.")
+        return
+    print("CHANNEL\tSTATUS\tCHAIN\tDEPOSIT\tAUTHORIZED\tSPENT\tPENDING\tRESOURCE")
+    for record in records:
+        pending = "-" if record.pending is None else record.pending.action.value
+        print(
+            "\t".join(
+                (
+                    record.channel_id,
+                    record.status.value,
+                    str(record.chain_id),
+                    str(record.deposit),
+                    str(record.authorized_cumulative),
+                    str(record.spent),
+                    pending,
+                    record.resource_url,
+                )
+            )
+        )
+
+
+async def _close_session(channel_id: str) -> tuple[int, str]:
+    host = SessionHost(_session_config(_hermes_home()))
+    transport: SessionPaymentTransport | None = None
+    try:
+        record = await host.store.get_by_channel(channel_id)
+        if record is None:
+            raise SystemExit(f"Unknown Tempo session channel: {channel_id}")
+        if not record.resource_url:
+            raise SystemExit("Tempo session has no stored resource URL for close negotiation")
+        transport = SessionPaymentTransport(host.manager_for_chain(record.chain_id))
+        try:
+            response = transport.close_session(record.channel_id, record.resource_url)
+            response.read()
+        except httpx.HTTPError as error:
+            raise SystemExit(f"Tempo session close failed: {error}") from error
+        return response.status_code, record.channel_id
+    finally:
+        if transport is not None:
+            transport.close()
+        host.close()
+
+
+def close_session(channel_id: str) -> None:
+    """Cooperatively close one durable Tempo session."""
+
+    status, normalized = asyncio.run(_close_session(channel_id))
+    if not 200 <= status < 300:
+        raise SystemExit(f"Tempo session close returned HTTP {status}")
+    print(f"Closed Tempo session {normalized}.")
+
+
 def install(python_override: str | None = None) -> None:
     home = _hermes_home()
     installation = _hermes_installation(home, python_override)
@@ -172,11 +259,26 @@ def main() -> None:
             metavar="PATH",
             help="Python executable used by Hermes (or set HERMES_PYTHON).",
         )
+    sessions_parser = subparsers.add_parser(
+        "sessions", help="List or close durable Tempo sessions."
+    )
+    session_commands = sessions_parser.add_subparsers(
+        dest="session_command", required=True
+    )
+    session_commands.add_parser("list", help="List durable Tempo sessions.")
+    close_parser = session_commands.add_parser(
+        "close", help="Cooperatively close a Tempo session."
+    )
+    close_parser.add_argument("channel_id", metavar="CHANNEL_ID")
     args = parser.parse_args()
     if args.command == "install":
         install(args.hermes_python)
-    else:
+    elif args.command == "uninstall":
         uninstall(args.hermes_python)
+    elif args.session_command == "list":
+        list_sessions()
+    else:
+        close_session(args.channel_id)
 
 
 if __name__ == "__main__":

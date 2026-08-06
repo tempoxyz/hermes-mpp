@@ -23,9 +23,11 @@ from mpp.errors import (
     PaymentOutcomeUnknownError,
 )
 from mpp.events import PAYMENT_FAILED, PAYMENT_RESPONSE
+from mpp.methods.tempo.session import is_tip1034_session_challenge
 from mpp.runtime import Method, PaymentRuntime
 
 RuntimeFactory = Callable[[], PaymentRuntime]
+SessionHint = Callable[[str], Awaitable[str | None]]
 Origin = tuple[str, str, int | None]
 
 _SUPPORTED_HTTPX = {(0, 27), (0, 28)}
@@ -132,14 +134,62 @@ class _Prepared:
     retry: httpx.Request
 
 
+def _method_supports_session(method: Method, challenge: Challenge) -> bool:
+    checker = getattr(method, "can_handle_session_challenge", None)
+    if checker is not None:
+        return bool(checker(challenge))
+    resolver = getattr(method, "session_manager_for", None)
+    if resolver is None:
+        return False
+    try:
+        manager = resolver(challenge)
+    except (TypeError, ValueError):
+        return False
+    manager_checker = getattr(manager, "can_handle_challenge", None)
+    return manager_checker is None or bool(manager_checker(challenge))
+
+
+class _SyncOriginalTransport(httpx.BaseTransport):
+    """Adapt HTTPX's original sync send seam to an upstream session transport."""
+
+    def __init__(self, send: Callable[[httpx.Request], httpx.Response]) -> None:
+        self._send = send
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        return self._send(request)
+
+
+class _AsyncOriginalTransport(httpx.AsyncBaseTransport):
+    """Adapt HTTPX's original async send seam to an upstream session transport."""
+
+    def __init__(
+        self,
+        send: Callable[[httpx.Request], Awaitable[httpx.Response]],
+    ) -> None:
+        self._send = send
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        return await self._send(request)
+
+
 class HttpxInstrumentation:
     """Restorable process-global HTTPX 0.27–0.28 instrumentation."""
 
-    def __init__(self, runtime_factory: RuntimeFactory, origins: Sequence[str] | None) -> None:
+    def __init__(
+        self,
+        runtime_factory: RuntimeFactory,
+        origins: Sequence[str] | None,
+        *,
+        session_hint: SessionHint | None = None,
+        close_session_store: Callable[[], None] | None = None,
+    ) -> None:
         _validate_httpx()
         self._runtime_factory = runtime_factory
         self._origins = _parse_origins(origins)
         self._ledger = _Ledger()
+        self._session_hint = session_hint
+        self._close_session_store = close_session_store
+        self._session_store_closed = False
         self._sync_original = inspect.getattr_static(httpx.Client, "_send_single_request")
         self._async_original = inspect.getattr_static(httpx.AsyncClient, "_send_single_request")
 
@@ -151,9 +201,41 @@ class HttpxInstrumentation:
             def raw(target: httpx.Request) -> httpx.Response:
                 return self._sync_original(client, target)
 
+            self._apply_sync_session_hint(request)
             response = raw(request)
             if not self._should_pay(request, response):
                 return response
+
+            try:
+                session_manager = self._session_manager(response)
+            except BaseException:
+                response.close()
+                raise
+            if session_manager is not None:
+                try:
+                    content = request.content
+                except httpx.RequestNotRead as cause:
+                    response.close()
+                    raise PaymentError(
+                        "Streaming request bodies cannot be replayed after a payment challenge. "
+                        "Use a buffered body for paid requests."
+                    ) from cause
+                base = _replay(
+                    request,
+                    content,
+                    client.cookies,
+                    _changed_cookies(response),
+                )
+                from mpp.methods.tempo.session import SessionPaymentTransport
+
+                token = _BYPASS.set(True)
+                try:
+                    return SessionPaymentTransport(
+                        session_manager,
+                        inner=_SyncOriginalTransport(raw),
+                    ).handle_payment_required(base, response)
+                finally:
+                    _BYPASS.reset(token)
 
             prepared = _run_async(
                 lambda: self._prepare_402(
@@ -180,9 +262,40 @@ class HttpxInstrumentation:
             async def send(target: httpx.Request) -> httpx.Response:
                 return await self._async_original(client, target)
 
+            await self._apply_async_session_hint(request)
             response = await send(request)
             if not self._should_pay(request, response):
                 return response
+            try:
+                session_manager = self._session_manager(response)
+            except BaseException:
+                await response.aclose()
+                raise
+            if session_manager is not None:
+                try:
+                    content = request.content
+                except httpx.RequestNotRead as cause:
+                    await response.aclose()
+                    raise PaymentError(
+                        "Streaming request bodies cannot be replayed after a payment challenge. "
+                        "Use a buffered body for paid requests."
+                    ) from cause
+                base = _replay(
+                    request,
+                    content,
+                    client.cookies,
+                    _changed_cookies(response),
+                )
+                from mpp.methods.tempo.session import AsyncSessionPaymentTransport
+
+                token = _BYPASS.set(True)
+                try:
+                    return await AsyncSessionPaymentTransport(
+                        session_manager,
+                        inner=_AsyncOriginalTransport(send),
+                    ).handle_payment_required(base, response)
+                finally:
+                    _BYPASS.reset(token)
             prepared = await self._prepare_402(
                 response,
                 client.cookies,
@@ -200,6 +313,40 @@ class HttpxInstrumentation:
         self._sync_wrapper = sync_send
         self._async_wrapper = async_send
 
+    def _may_hint(self, request: httpx.Request) -> bool:
+        return (
+            not _BYPASS.get()
+            and self._session_hint is not None
+            and (self._origins is None or _origin(request.url) in self._origins)
+            and "Payment-Session" not in request.headers
+        )
+
+    def _apply_sync_session_hint(self, request: httpx.Request) -> None:
+        if not self._may_hint(request):
+            return
+        assert self._session_hint is not None
+        hint = _run_async(lambda: self._session_hint(str(request.url)))
+        if hint is not None:
+            request.headers["Payment-Session"] = hint
+
+    async def _apply_async_session_hint(self, request: httpx.Request) -> None:
+        if not self._may_hint(request):
+            return
+        assert self._session_hint is not None
+        hint = await self._session_hint(str(request.url))
+        if hint is not None:
+            request.headers["Payment-Session"] = hint
+
+    def _session_manager(self, response: httpx.Response) -> Any | None:
+        runtime = self._runtime_factory()
+        match = _match(runtime, response)
+        if match.challenge is None or match.method is None:
+            return None
+        resolver = getattr(match.method, "session_manager_for", None)
+        if resolver is None or not is_tip1034_session_challenge(match.challenge):
+            return None
+        return resolver(match.challenge)
+
     @property
     def active(self) -> bool:
         return _OWNER is self
@@ -210,8 +357,7 @@ class HttpxInstrumentation:
         response: httpx.Response,
     ) -> bool:
         allowed = self._origins is None or (
-            _origin(request.url) in self._origins
-            and _origin(response.request.url) in self._origins
+            _origin(request.url) in self._origins and _origin(response.request.url) in self._origins
         )
         return not _BYPASS.get() and allowed and response.status_code == 402
 
@@ -362,9 +508,7 @@ class HttpxInstrumentation:
         with _PATCH_LOCK:
             if _OWNER is not self:
                 return
-            if (
-                inspect.getattr_static(httpx.Client, "_send_single_request") is self._sync_wrapper
-            ):
+            if inspect.getattr_static(httpx.Client, "_send_single_request") is self._sync_wrapper:
                 httpx.Client._send_single_request = self._sync_original  # type: ignore[method-assign]
             if (
                 inspect.getattr_static(httpx.AsyncClient, "_send_single_request")
@@ -372,13 +516,24 @@ class HttpxInstrumentation:
             ):
                 httpx.AsyncClient._send_single_request = self._async_original  # type: ignore[method-assign]
             _OWNER = None
+        if self._close_session_store is not None and not self._session_store_closed:
+            self._session_store_closed = True
+            self._close_session_store()
 
 
 def instrument_httpx(
     runtime_factory: RuntimeFactory,
     origins: Sequence[str] | None,
+    *,
+    session_hint: SessionHint | None = None,
+    close_session_store: Callable[[], None] | None = None,
 ) -> HttpxInstrumentation:
-    instrumentation = HttpxInstrumentation(runtime_factory, origins)
+    instrumentation = HttpxInstrumentation(
+        runtime_factory,
+        origins,
+        session_hint=session_hint,
+        close_session_store=close_session_store,
+    )
     instrumentation.enable()
     return instrumentation
 
@@ -395,8 +550,27 @@ def _match(runtime: PaymentRuntime, response: httpx.Response) -> _Match:
             except ParseError as error:
                 parse_error = error
 
+    session_match = next(
+        (
+            (challenge, method)
+            for challenge in challenges
+            if is_tip1034_session_challenge(challenge)
+            for method in runtime.methods
+            if method.name == challenge.method and _method_supports_session(method, challenge)
+        ),
+        None,
+    )
+    non_session_challenges = [
+        challenge
+        for challenge in challenges
+        if not (challenge.method == "tempo" and challenge.intent == "session")
+    ]
     try:
-        challenge, method = runtime.match_challenge(challenges)
+        challenge, method = (
+            session_match
+            if session_match is not None
+            else runtime.match_challenge(non_session_challenges)
+        )
     except ValueError as error:
         return _Match(
             challenges,
@@ -519,8 +693,20 @@ def _retry(
     cookies: httpx.Cookies,
     changed_cookies: set[str],
 ) -> httpx.Request:
+    retry = _replay(request, content, cookies, changed_cookies)
+    retry.headers["Authorization"] = credential.to_authorization()
+    return retry
+
+
+def _replay(
+    request: httpx.Request,
+    content: bytes,
+    cookies: httpx.Cookies,
+    changed_cookies: set[str],
+) -> httpx.Request:
+    """Create a replayable request with challenge-response cookie updates."""
+
     headers = httpx.Headers(request.headers)
-    headers["Authorization"] = credential.to_authorization()
     headers.pop("Cookie", None)
     retry = httpx.Request(
         request.method,

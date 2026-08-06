@@ -49,6 +49,63 @@ def required(identifier: str, *, realm: str = "allowed.test") -> httpx.Response:
     )
 
 
+def session_required(identifier: str, *, protocol: str = "v2") -> Challenge:
+    return Challenge(
+        id=identifier,
+        method="tempo",
+        intent="session",
+        request={
+            "amount": "1",
+            "currency": "0x" + "11" * 20,
+            "recipient": "0x" + "22" * 20,
+            "methodDetails": {
+                "chainId": 42431,
+                "escrowContract": "0x4D50500000000000000000000000000000000000",
+                "sessionProtocol": protocol,
+            },
+        },
+    )
+
+
+class FakeSessionManager:
+    def __init__(self) -> None:
+        self.prepared: list[tuple[str, str]] = []
+        self.responses: list[int] = []
+
+    async def prepare(self, challenge: Challenge, *, resource_url: str, **_: Any) -> Credential:
+        self.prepared.append((challenge.id, resource_url))
+        return Credential(
+            challenge=challenge.to_echo(),
+            payload={
+                "action": "voucher",
+                "channelId": "0x" + "12" * 32,
+                "cumulativeAmount": "1",
+                "signature": "0x" + "34" * 65,
+            },
+        )
+
+    async def handle_response(
+        self,
+        _credential: Credential,
+        *,
+        status_code: int,
+        headers: Any,
+    ) -> None:
+        self.responses.append(status_code)
+
+    async def handle_unknown(self, _credential: Credential) -> None:
+        raise AssertionError("session outcome was unexpectedly uncertain")
+
+
+class SessionMethod(FakeMethod):
+    def __init__(self, manager: FakeSessionManager) -> None:
+        super().__init__()
+        self.manager = manager
+
+    def session_manager_for(self, _challenge: Challenge) -> FakeSessionManager:
+        return self.manager
+
+
 def setup() -> tuple[FakeMethod, EventDispatcher, HttpxInstrumentation]:
     method = FakeMethod()
     events = EventDispatcher()
@@ -107,6 +164,118 @@ def test_sync_async_preexisting_and_events() -> None:
     assert names.count("payment.response") == 3
 
     preexisting.close()
+
+
+def test_sync_and_async_sessions_use_upstream_driver_and_prefer_session() -> None:
+    manager = FakeSessionManager()
+    method = SessionMethod(manager)
+    hinted: list[str] = []
+
+    async def hint(resource_url: str) -> str | None:
+        hinted.append(resource_url)
+        return "0x" + "12" * 32
+
+    instrument_httpx(
+        lambda: PaymentRuntime([method]),
+        [ALLOWED],
+        session_hint=hint,
+    )
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if "authorization" in request.headers:
+            credential = Credential.from_authorization(request.headers["authorization"])
+            assert credential.challenge.intent == "session"
+            assert credential.payload["action"] == "voucher"
+            return httpx.Response(200)
+        charge_response = required(f"charge-{len(requests)}")
+        session = session_required(f"session-{len(requests)}")
+        return httpx.Response(
+            402,
+            headers=[
+                ("www-authenticate", charge_response.headers["www-authenticate"]),
+                ("www-authenticate", session.to_www_authenticate("allowed.test")),
+            ],
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert client.get(f"{ALLOWED}/sync-session").status_code == 200
+
+    async def send() -> int:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return (await client.get(f"{ALLOWED}/async-session")).status_code
+
+    assert asyncio.run(send()) == 200
+    assert [request.headers.get("payment-session") for request in requests[::2]] == [
+        "0x" + "12" * 32,
+        "0x" + "12" * 32,
+    ]
+    assert manager.responses == [200, 200]
+    assert method.calls == 0
+    assert hinted == [f"{ALLOWED}/sync-session", f"{ALLOWED}/async-session"]
+
+
+def test_unsupported_session_does_not_shadow_charge() -> None:
+    manager = FakeSessionManager()
+    method = SessionMethod(manager)
+    instrument_httpx(lambda: PaymentRuntime([method]), [ALLOWED])
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if "authorization" in request.headers:
+            credential = Credential.from_authorization(request.headers["authorization"])
+            assert credential.challenge.intent == "charge"
+            return httpx.Response(200)
+        charge = required("charge")
+        unsupported = session_required("unsupported", protocol="v1")
+        return httpx.Response(
+            402,
+            headers=[
+                ("www-authenticate", unsupported.to_www_authenticate("allowed.test")),
+                ("www-authenticate", charge.headers["www-authenticate"]),
+            ],
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert client.get(f"{ALLOWED}/fallback").status_code == 200
+
+    assert_paid(requests)
+    assert method.calls == 1
+    assert manager.prepared == []
+
+
+def test_session_outside_local_policy_does_not_shadow_charge() -> None:
+    class RestrictedMethod(FakeMethod):
+        def session_manager_for(self, _challenge: Challenge) -> FakeSessionManager:
+            raise ValueError("unsupported chain")
+
+    method = RestrictedMethod()
+    instrument_httpx(lambda: PaymentRuntime([method]), [ALLOWED])
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if "authorization" in request.headers:
+            credential = Credential.from_authorization(request.headers["authorization"])
+            assert credential.challenge.intent == "charge"
+            return httpx.Response(200)
+        charge = required("charge")
+        session = session_required("unsupported-chain")
+        return httpx.Response(
+            402,
+            headers=[
+                ("www-authenticate", session.to_www_authenticate("allowed.test")),
+                ("www-authenticate", charge.headers["www-authenticate"]),
+            ],
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert client.get(f"{ALLOWED}/local-policy").status_code == 200
+
+    assert_paid(requests)
+    assert method.calls == 1
 
 
 def test_sync_response_hook_observes_only_paid_response() -> None:
