@@ -30,6 +30,24 @@ def test_wallet_generates_and_persists_a_private_key(
     assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
 
 
+def test_write_env_creates_temporary_file_owner_only(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    modes: list[int] = []
+    fdopen = cli.os.fdopen
+
+    def inspect_mode(descriptor: int, *args, **kwargs):
+        modes.append(stat.S_IMODE(cli.os.fstat(descriptor).st_mode))
+        return fdopen(descriptor, *args, **kwargs)
+
+    monkeypatch.setattr(cli.os, "fdopen", inspect_mode)
+
+    cli._write_env(tmp_path / ".env", "TEMPO_PRIVATE_KEY", PRIVATE_KEY)
+
+    assert modes == [0o600]
+
+
 def test_wallet_reuses_existing_key_without_prompt(
     tmp_path: Path,
     monkeypatch,

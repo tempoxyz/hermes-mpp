@@ -7,6 +7,7 @@ import os
 import secrets
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -97,10 +98,21 @@ def _write_env(path: Path, key: str, value: str) -> None:
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     lines = [line for line in lines if not line.startswith(f"{key}=")]
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f"{path.name}.tmp")
-    temporary.write_text("\n".join([*lines, f"{key}={value}"]) + "\n")
-    temporary.chmod(0o600)
-    temporary.replace(path)
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        text=True,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+            file.write("\n".join([*lines, f"{key}={value}"]) + "\n")
+            file.flush()
+            os.fsync(file.fileno())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _wallet(env_file: Path) -> TempoAccount:
