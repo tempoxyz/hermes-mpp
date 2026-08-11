@@ -1,10 +1,11 @@
 # hermes-mpp
 
 `hermes-mpp` makes [Hermes Agent](https://hermes-agent.nousresearch.com) HTTPX
-traffic payment-aware. It answers supported MPP `402` challenges with a Tempo
-charge and retries the request through the same client.
+and Requests traffic payment-aware. It answers supported MPP `402` challenges
+with a Tempo charge and retries the request through the same client.
 
-V1 targets Hermes Agent 0.19, HTTPX 0.27–0.28, and pympp 0.10.
+V1 targets Hermes Agent 0.19 and the current 0.20 development branch, HTTPX
+0.27–0.28, Requests 2.31–2.33, and pympp 0.10.
 
 ## Install
 
@@ -39,29 +40,42 @@ development; an on-path attacker can inject a payment challenge.
 
 ## Use
 
-Ask Hermes for the resource normally:
+Existing Hermes tools and Python SDKs need no MPP-specific adapter. For example,
+point Hermes's OpenAI-compatible model client at a keyless MPP endpoint once:
+
+This live endpoint charges mainnet funds. Use a dedicated, low-balance wallet.
 
 ```sh
-hermes chat -q "Make a request to https://mpp.dev/api/ping/paid"
+hermes config set model.provider custom
+hermes config set model.base_url https://mpp.orthogonal.com/baseten/v1
+hermes config set model.default openai/gpt-oss-120b
+hermes chat -q "Reply with exactly: payment aware"
 ```
 
-The model gets one generic `mpp_fetch` tool for arbitrary HTTP APIs. Payment is
-not a separate tool call: it and every other in-process HTTPX client handle
+The unmodified OpenAI SDK sends its normal HTTPX call. The plugin handles a
+supported `402` before the SDK sees it, pays once, and returns the model
+response. No provider API key or service-specific plugin code is involved.
+
+The model also gets one generic `mpp_fetch` tool for arbitrary HTTP APIs. Payment
+is not a separate tool call: it and in-process HTTPX and Requests clients handle
 supported MPP challenges automatically.
 
 ## Behavior
 
-- Existing and future sync and async clients retain their transport, pool,
-  cookies, hooks, redirects, extensions, and streaming behavior. Response hooks
-  observe the final logical response rather than the internal `402`.
+- Existing and future HTTPX clients and Requests sessions retain their transport,
+  pool, cookies, hooks, redirects, and request options. Response hooks observe
+  the final logical response rather than the internal `402`.
 - Free responses pass through. Malformed, unsupported, and disallowed
   challenges remain ordinary `402` responses.
 - A paid request is retried at most once. Distinct payments are serialized;
   equivalent, repeated, and uncertain attempts fail closed.
 - `mpp_fetch` blocks private-network redirects, hides sensitive response headers,
   and truncates large bodies.
-- Only HTTPX traffic in the Hermes process is instrumented. Shell commands and
-  Requests, aiohttp, or urllib3 are not; use `mpp_fetch` for arbitrary HTTP.
+- HTTPX and `requests.Session` calls in the Hermes process are instrumented.
+  Direct urllib3, aiohttp, browser, subprocess, and shell traffic are not. A
+  provider must still be configured well enough to issue its first request;
+  transport instrumentation cannot bypass a provider's preflight credential
+  gate.
 
 If a payment outcome is uncertain, verify the wallet transaction before
 restarting Hermes; later payments remain blocked in that process.
@@ -84,4 +98,4 @@ uv run pytest
 uv run ruff check .
 ```
 
-CI tests Python 3.11–3.13 and HTTPX 0.27–0.28.
+CI tests Python 3.11–3.13, HTTPX 0.27–0.28, and Requests 2.31–2.33.

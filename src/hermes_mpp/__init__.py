@@ -10,20 +10,20 @@ from mpp.methods.tempo import TempoAccount
 from mpp.runtime import PaymentRuntime
 
 from .config import Config
-from .httpx import HttpxInstrumentation, instrument_httpx
 from .tempo import ChallengeTempo
+from .transports import TransportInstrumentation, instrument_transports
 
-_instrumentation: HttpxInstrumentation | None = None
+_instrumentation: TransportInstrumentation | None = None
 _lock = threading.Lock()
 
 
-def _create_instrumentation(config: Config) -> HttpxInstrumentation:
+def _create_instrumentation(config: Config) -> TransportInstrumentation:
     account = TempoAccount.from_key(config.private_key)
 
     def runtime_factory() -> PaymentRuntime:
         return PaymentRuntime([ChallengeTempo(account)])
 
-    return instrument_httpx(runtime_factory, config.allowed_origins)
+    return instrument_transports(runtime_factory, config.allowed_origins)
 
 
 def register(ctx: Any) -> None:
