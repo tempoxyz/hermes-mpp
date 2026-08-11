@@ -12,6 +12,8 @@ from pathlib import Path
 
 from mpp.methods.tempo import TempoAccount
 
+from .httpx import _parse_origins
+
 
 def _hermes_home() -> Path:
     return Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes")).expanduser()
@@ -91,6 +93,16 @@ def _env_key(path: Path) -> str | None:
     return None
 
 
+def _write_env(path: Path, key: str, value: str) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    lines = [line for line in lines if not line.startswith(f"{key}=")]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.tmp")
+    temporary.write_text("\n".join([*lines, f"{key}={value}"]) + "\n")
+    temporary.chmod(0o600)
+    temporary.replace(path)
+
+
 def _wallet(env_file: Path) -> TempoAccount:
     private_key = _env_key(env_file) or os.environ.get("TEMPO_PRIVATE_KEY", "").strip()
     if not private_key:
@@ -104,17 +116,20 @@ def _wallet(env_file: Path) -> TempoAccount:
     except Exception as error:
         raise SystemExit("Invalid Tempo private key.") from error
 
-    lines = env_file.read_text(encoding="utf-8").splitlines() if env_file.exists() else []
-    lines = [line for line in lines if not line.startswith("TEMPO_PRIVATE_KEY=")]
-    env_file.parent.mkdir(parents=True, exist_ok=True)
-    temporary = env_file.with_name(f"{env_file.name}.tmp")
-    temporary.write_text("\n".join([*lines, f"TEMPO_PRIVATE_KEY={private_key}"]) + "\n")
-    temporary.chmod(0o600)
-    temporary.replace(env_file)
+    _write_env(env_file, "TEMPO_PRIVATE_KEY", private_key)
     return account
 
 
-def install(python_override: str | None = None) -> None:
+def install(
+    python_override: str | None = None,
+    *,
+    allowed_origins: list[str] | None = None,
+) -> None:
+    if allowed_origins is not None:
+        try:
+            _parse_origins(allowed_origins)
+        except (TypeError, ValueError) as error:
+            raise SystemExit(str(error)) from None
     home = _hermes_home()
     installation = _hermes_installation(home, python_override)
     uv = shutil.which("uv")
@@ -131,7 +146,10 @@ def install(python_override: str | None = None) -> None:
     subprocess.run(
         [uv, "pip", "install", "--python", str(installation.python), package], check=True
     )
-    account = _wallet(home / ".env")
+    env_file = home / ".env"
+    account = _wallet(env_file)
+    if allowed_origins is not None:
+        _write_env(env_file, "MPP_ALLOWED_ORIGINS", ",".join(allowed_origins))
     subprocess.run(
         [str(installation.hermes), "plugins", "enable", "mpp", "--no-allow-tool-override"],
         check=True,
@@ -172,9 +190,16 @@ def main() -> None:
             metavar="PATH",
             help="Python executable used by Hermes (or set HERMES_PYTHON).",
         )
+        if command == "install":
+            command_parser.add_argument(
+                "--allowed-origin",
+                action="append",
+                metavar="ORIGIN",
+                help="Exact origin allowed to charge the wallet; repeat to allow more than one.",
+            )
     args = parser.parse_args()
     if args.command == "install":
-        install(args.hermes_python)
+        install(args.hermes_python, allowed_origins=args.allowed_origin)
     else:
         uninstall(args.hermes_python)
 

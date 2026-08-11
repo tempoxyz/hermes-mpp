@@ -62,6 +62,7 @@ def test_install_targets_hermes_and_enables_plugin(
     capsys,
 ) -> None:
     calls: list[tuple[list[str], dict]] = []
+    (tmp_path / ".env").write_text(f"TEMPO_PRIVATE_KEY={PRIVATE_KEY}\n", encoding="utf-8")
     monkeypatch.setattr(cli, "_hermes_home", lambda: tmp_path)
     monkeypatch.setattr(
         cli,
@@ -77,7 +78,7 @@ def test_install_targets_hermes_and_enables_plugin(
         lambda command, **kwargs: calls.append((command, kwargs)),
     )
 
-    cli.install()
+    cli.install(allowed_origins=["https://mpp.dev", "https://api.example.com"])
 
     assert calls[0][0] == [
         "/usr/bin/uv",
@@ -102,7 +103,23 @@ def test_install_targets_hermes_and_enables_plugin(
         "mpp",
         "--no-allow-tool-override",
     ]
+    assert (tmp_path / ".env").read_text(encoding="utf-8") == (
+        f"TEMPO_PRIVATE_KEY={PRIVATE_KEY}\n"
+        "MPP_ALLOWED_ORIGINS=https://mpp.dev,https://api.example.com\n"
+    )
+    assert stat.S_IMODE((tmp_path / ".env").stat().st_mode) == 0o600
     assert capsys.readouterr().out == "Installed hermes-mpp. Wallet: 0xabc\n"
+
+
+def test_install_rejects_invalid_origin_before_changes(monkeypatch) -> None:
+    monkeypatch.setattr(
+        cli,
+        "_hermes_installation",
+        lambda *_: (_ for _ in ()).throw(AssertionError("unexpected install")),
+    )
+
+    with pytest.raises(SystemExit, match="Invalid HTTP origin"):
+        cli.install(allowed_origins=["https://mpp.dev/path"])
 
 
 def test_uninstall_disables_plugin_and_keeps_wallet(
