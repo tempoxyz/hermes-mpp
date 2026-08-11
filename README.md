@@ -1,10 +1,20 @@
-# hermes-mpp
+# MPP for Hermes Agent
+
+[![PyPI](https://img.shields.io/pypi/v/hermes-mpp.svg)](https://pypi.org/project/hermes-mpp/)
+[![CI](https://github.com/tempoxyz/hermes-mpp/actions/workflows/ci.yml/badge.svg)](https://github.com/tempoxyz/hermes-mpp/actions/workflows/ci.yml)
+[![License](https://img.shields.io/pypi/l/hermes-mpp.svg)](./LICENSE)
 
 `hermes-mpp` makes [Hermes Agent](https://hermes-agent.nousresearch.com) HTTPX
 traffic payment-aware. It answers supported MPP `402` challenges with a Tempo
 charge and retries the request through the same client.
 
-V1 targets Hermes Agent 0.19, HTTPX 0.27–0.28, and pympp 0.10.
+Maintained by [Tempo](https://tempo.xyz), the team behind [MPP](https://mpp.dev).
+
+> [!IMPORTANT]
+> This is experimental v0 software. It can authorize real payments automatically with the
+> configured Tempo key. Use a dedicated, low-balance key and restrict allowed origins.
+
+v0 targets Hermes Agent 0.19, HTTPX 0.27–0.28, and pympp 0.10.
 
 ## Install
 
@@ -85,3 +95,11 @@ uv run ruff check .
 ```
 
 CI tests Python 3.11–3.13 and HTTPX 0.27–0.28.
+
+## Security
+
+Report vulnerabilities privately as described in [SECURITY.md](./SECURITY.md).
+
+## License
+
+MIT
