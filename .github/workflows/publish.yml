@@ -25,7 +25,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
 
-      - uses: tempoxyz/changelogs@466632795bfca34dc9bb7f7bcab9f50c6e3f3726 # OIDC trusted publishing
+      - uses: wevm/changelogs@466632795bfca34dc9bb7f7bcab9f50c6e3f3726 # OIDC trusted publishing
         with:
           ecosystem: python
           python-version: '3.12'
