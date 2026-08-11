@@ -32,6 +32,13 @@ dev = [
     "ruff>=0.15",
 ]
 
+[tool.uv]
+override-dependencies = [
+    # Hermes Agent 0.19 pins vulnerable versions in the development environment.
+    "cryptography==50.0.0",
+    "pillow==12.3.0",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/hermes_mpp"]
 
