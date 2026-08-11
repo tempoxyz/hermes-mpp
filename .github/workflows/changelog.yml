@@ -2,48 +2,52 @@ name: Changelog
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened]
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   changelog:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.head_ref }}
           persist-credentials: false
-
-      - name: Skip automated release PR
-        if: ${{ startsWith(github.head_ref, 'changelog-release/') }}
-        run: echo "Automated release PR already consumes changelog fragments"
-
       - name: Install changelogs
-        if: ${{ !startsWith(github.head_ref, 'changelog-release/') }}
         run: |
           mkdir -p "$HOME/.local/bin"
           curl -fsSL "https://github.com/wevm/changelogs-rs/releases/download/changelogs%400.6.3/changelogs-linux-amd64" \
             -o "$HOME/.local/bin/changelogs"
           echo "d4168ee68b612224a26a39e86bfd2c923ac3dd2de12ee43d2bb65a5ea19df6b6  $HOME/.local/bin/changelogs" | sha256sum -c
           chmod +x "$HOME/.local/bin/changelogs"
-
-      - name: Validate changelog
-        if: ${{ !startsWith(github.head_ref, 'changelog-release/') }}
+      - name: Generate changelog
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BASE_REF: ${{ github.base_ref }}
+          CLAUDE: npx -y @anthropic-ai/claude-code@2.1.97 --bare -p
         run: |
-          RANGE="origin/${BASE_REF}...HEAD"
-          CHANGED=$(git diff --name-only "$RANGE")
-          RELEASABLE=$(printf '%s\n' "$CHANGED" | grep -vE '^(\.changelog/|\.github/|\.gitignore$|AGENTS\.md$|LICENSE$|README\.md$)' || true)
-          FRAGMENTS=$(git diff --name-only --diff-filter=ACMR "$RANGE" -- '.changelog/*.md' | grep -v '^\.changelog/README\.md$' || true)
-
-          if [ -n "$RELEASABLE" ] && [ -z "$FRAGMENTS" ]; then
-            echo "::error title=Missing changelog::Add a .changelog/*.md fragment, or run 'changelogs add --empty' for an explicit no-release change."
-            printf 'Releasable paths without a changelog fragment:\n%s\n' "$RELEASABLE"
-            exit 1
+          rm -rf .claude/
+          CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD")
+          CODE_CHANGES=$(echo "$CHANGED" | grep -vE '^(\.changelog/|\.github/|\.gitignore|README\.md|AGENTS\.md)' || true)
+          if [ -z "$CODE_CHANGES" ]; then
+            echo "No code changes requiring changelog, skipping"
+            exit 0
           fi
-
-          changelogs doctor --ecosystem python
+          ~/.local/bin/changelogs add --ecosystem python --ai "$CLAUDE" --ref "origin/${BASE_REF}"
+      - name: Commit changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -n "$(git status --porcelain .changelog/)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}"
+            git add .changelog/
+            git commit -m "chore: add changelog"
+            git push
+          fi
