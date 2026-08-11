@@ -22,12 +22,13 @@ After [installing Hermes](https://hermes-agent.nousresearch.com/docs/getting-sta
 run:
 
 ```sh
-uvx hermes-mpp install
+uvx hermes-mpp install --allowed-origin https://mpp.dev
 ```
 
 The installer adds and enables the plugin, then prompts for a Tempo private key;
 leave it blank to generate one. It stores the key in `~/.hermes/.env` with
-owner-only permissions and prints the address to fund.
+owner-only permissions, saves each `--allowed-origin`, and prints the address to
+fund.
 
 The installer discovers standard, root, and `PATH`-based Hermes installations.
 For a custom environment, run `uvx hermes-mpp install --hermes-python PATH` or
@@ -36,13 +37,10 @@ set `HERMES_PYTHON`.
 Generated wallets start empty. For testnet resources, fund the printed address
 with the [Tempo faucet](https://docs.tempo.xyz/guide/use-accounts/add-funds).
 
-Use a dedicated, low-balance key. By default, any origin presenting a valid MPP
-challenge can charge it without a prompt or spend cap. To restrict payments,
-set an exact, comma-separated allowlist:
-
-```sh
-MPP_ALLOWED_ORIGINS=https://mpp.dev,https://api.example.com
-```
+On first install, omitting `--allowed-origin` allows any origin presenting a valid
+MPP challenge to charge the wallet. Repeat the option to allow multiple exact
+origins. Reinstalling without it preserves the allowlist; passing it replaces the
+list.
 
 Paths and wildcards are rejected. Use plaintext `http://` only for trusted local
 development; an on-path attacker can inject a payment challenge.
@@ -80,7 +78,7 @@ restarting Hermes; later payments remain blocked in that process.
 
 ```sh
 hermes plugins list
-uvx --refresh hermes-mpp install  # update or reconfigure
+uvx --refresh hermes-mpp install  # update
 uvx hermes-mpp uninstall
 ```
 
