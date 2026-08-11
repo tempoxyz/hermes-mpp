@@ -47,6 +47,23 @@ jobs:
           next(iter(entry_points(group='hermes_agent.plugins', name='mpp'))).load()"
       - run: uvx --isolated --no-cache --from dist/*.whl hermes-mpp --help
 
+  hermes-head:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: NousResearch/hermes-agent
+          ref: 0957277f2f468bac22bbfcfa7c43029858c9597e
+          path: .hermes-agent
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv pip install -e ".hermes-agent[mcp]"
+      - run: uv run --no-sync pytest
+
   httpx:
     runs-on: ubuntu-latest
     strategy:
