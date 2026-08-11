@@ -5,6 +5,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import requests
 
 import hermes_mpp
 
@@ -49,20 +50,23 @@ def test_real_hermes_entrypoint_load_is_idempotent(
     assert hermes_mpp._instrumentation is None
     assert (
         inspect.getattr_static(httpx.Client, "_send_single_request")
-        is instrumentation._sync_original
+        is instrumentation.httpx._sync_original
     )
+    assert inspect.getattr_static(requests.Session, "send") is instrumentation.requests._original
 
 
-def test_registration_failure_restores_httpx(monkeypatch) -> None:
+def test_registration_failure_restores_transports(monkeypatch) -> None:
     class Context:
         def register_tool(self, **_kwargs) -> None:
             raise RuntimeError("conflict")
 
     monkeypatch.setenv("TEMPO_PRIVATE_KEY", TEST_PRIVATE_KEY)
-    original = inspect.getattr_static(httpx.Client, "_send_single_request")
+    httpx_original = inspect.getattr_static(httpx.Client, "_send_single_request")
+    requests_original = inspect.getattr_static(requests.Session, "send")
 
     with pytest.raises(RuntimeError, match="conflict"):
         hermes_mpp.register(Context())
 
     assert hermes_mpp._instrumentation is None
-    assert inspect.getattr_static(httpx.Client, "_send_single_request") is original
+    assert inspect.getattr_static(httpx.Client, "_send_single_request") is httpx_original
+    assert inspect.getattr_static(requests.Session, "send") is requests_original

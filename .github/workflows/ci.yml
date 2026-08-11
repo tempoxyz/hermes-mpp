@@ -61,3 +61,18 @@ jobs:
       - run: uv sync --locked
       - run: uv pip install "httpx==${{ matrix.httpx }}"
       - run: uv run --no-sync pytest
+
+  requests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        requests: ["2.31.0", "2.32.5", "2.33.0"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv pip install "requests==${{ matrix.requests }}"
+      - run: uv run --no-sync pytest
