@@ -8,7 +8,46 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
+  ci-gate:
+    name: CI Gate
+    if: always()
+    needs: [audit, httpx, package, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required jobs
+        env:
+          ANY_FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: |
+          if [[ "$ANY_FAILED" == "true" ]]; then
+            echo "One or more required jobs failed or were cancelled"
+            exit 1
+          fi
+
+  audit:
+    name: Audit runtime dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Export runtime requirements
+        run: >-
+          uv export --locked --no-dev --no-emit-project --no-hashes
+          --output-file "$RUNNER_TEMP/requirements-runtime.txt"
+      - name: Audit runtime requirements
+        run: >-
+          uvx --from pip-audit==2.10.1 pip-audit
+          -r "$RUNNER_TEMP/requirements-runtime.txt"
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -16,8 +55,10 @@ jobs:
       matrix:
         python: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: ${{ matrix.python }}
           enable-cache: true
@@ -29,8 +70,10 @@ jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: "3.13"
           enable-cache: true
@@ -53,11 +96,15 @@ jobs:
       matrix:
         httpx: ["0.27.0", "0.28.1"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: "3.13"
           enable-cache: true
       - run: uv sync --locked
-      - run: uv pip install "httpx==${{ matrix.httpx }}"
+      - env:
+          HTTPX_VERSION: ${{ matrix.httpx }}
+        run: uv pip install "httpx==$HTTPX_VERSION"
       - run: uv run --no-sync pytest
