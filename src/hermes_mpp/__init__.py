@@ -6,11 +6,11 @@ import atexit
 import threading
 from typing import Any
 
-from mpp.methods.tempo import TempoAccount
 from mpp.runtime import PaymentRuntime
 
 from .config import Config
 from .httpx import HttpxInstrumentation, instrument_httpx
+from .session import SessionHost
 from .tempo import ChallengeTempo
 
 _instrumentation: HttpxInstrumentation | None = None
@@ -18,12 +18,18 @@ _lock = threading.Lock()
 
 
 def _create_instrumentation(config: Config) -> HttpxInstrumentation:
-    account = TempoAccount.from_key(config.private_key)
+    sessions = SessionHost(config)
+    method = ChallengeTempo(sessions.account, sessions.manager_for_chain)
 
     def runtime_factory() -> PaymentRuntime:
-        return PaymentRuntime([ChallengeTempo(account)])
+        return PaymentRuntime([method])
 
-    return instrument_httpx(runtime_factory, config.allowed_origins)
+    return instrument_httpx(
+        runtime_factory,
+        config.allowed_origins,
+        session_hint=sessions.hint,
+        close_session_store=sessions.close,
+    )
 
 
 def register(ctx: Any) -> None:

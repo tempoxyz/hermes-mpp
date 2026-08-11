@@ -2,9 +2,9 @@
 
 `hermes-mpp` makes [Hermes Agent](https://hermes-agent.nousresearch.com) HTTPX
 traffic payment-aware. It answers supported MPP `402` challenges with a Tempo
-charge and retries the request through the same client.
+charge or TIP-1034 session and retries the request through the same client.
 
-V1 targets Hermes Agent 0.19, HTTPX 0.27–0.28, and pympp 0.10.
+V1 targets Hermes Agent 0.19, HTTPX 0.27–0.28, and pympp 0.11.
 
 ## Install
 
@@ -27,8 +27,12 @@ Generated wallets start empty. For testnet resources, fund the printed address
 with the [Tempo faucet](https://docs.tempo.xyz/guide/use-accounts/add-funds).
 
 Use a dedicated, low-balance key. By default, any origin presenting a valid MPP
-challenge can charge it without a prompt or spend cap. To restrict payments,
-set an exact, comma-separated allowlist:
+challenge can charge it without a prompt. Session channels have 10-token
+deposit and cumulative-spend caps and a 5-token per-operation top-up cap (all
+defaults assume a six-decimal token). Configure raw base-unit limits with
+`MPP_SESSION_MAX_DEPOSIT`, `MPP_SESSION_MAX_TOP_UP`, and
+`MPP_SESSION_MAX_SPEND`. To restrict all payments, set an exact,
+comma-separated allowlist:
 
 ```sh
 MPP_ALLOWED_ORIGINS=https://mpp.dev,https://api.example.com
@@ -56,20 +60,29 @@ supported MPP challenges automatically.
   observe the final logical response rather than the internal `402`.
 - Free responses pass through. Malformed, unsupported, and disallowed
   challenges remain ordinary `402` responses.
-- A paid request is retried at most once. Distinct payments are serialized;
-  equivalent, repeated, and uncertain attempts fail closed.
+- Tempo charges retain their existing one-retry, globally serialized behavior.
+  Session operations are serialized per channel, while unrelated channels can
+  pay concurrently.
+- Session channel state and exact pending signed operations are journaled to
+  `$HERMES_HOME/mpp-sessions.sqlite3` before submission. Restarts reconcile or
+  replay the same operation instead of creating another deposit or a higher
+  voucher.
+- Ordinary HTTP requests and SSE session control frames are handled. WebSocket
+  session driving is deferred.
 - `mpp_fetch` blocks private-network redirects, hides sensitive response headers,
   and truncates large bodies.
 - Only HTTPX traffic in the Hermes process is instrumented. Shell commands and
   Requests, aiohttp, or urllib3 are not; use `mpp_fetch` for arbitrary HTTP.
 
-If a payment outcome is uncertain, verify the wallet transaction before
-restarting Hermes; later payments remain blocked in that process.
+An uncertain Tempo charge still blocks later charges in that process. Tempo
+sessions recover independently from their durable per-channel journals.
 
 ## Manage
 
 ```sh
 hermes plugins list
+uvx hermes-mpp sessions list
+uvx hermes-mpp sessions close 0xCHANNEL_ID
 uvx --refresh hermes-mpp install  # update or reconfigure
 uvx hermes-mpp uninstall
 ```

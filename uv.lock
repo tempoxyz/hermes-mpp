@@ -820,7 +820,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27,<0.29" },
-    { name = "pympp", extras = ["tempo"], specifier = ">=0.10,<0.11" },
+    { name = "pympp", extras = ["tempo"], git = "https://github.com/tempoxyz/pympp.git?rev=1881727275d11415fdb424781eeaaeff1e7f2f5f" },
 ]
 
 [package.metadata.requires-dev]
@@ -1538,13 +1538,9 @@ crypto = [
 [[package]]
 name = "pympp"
 version = "0.10.0"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/tempoxyz/pympp.git?rev=1881727275d11415fdb424781eeaaeff1e7f2f5f#1881727275d11415fdb424781eeaaeff1e7f2f5f" }
 dependencies = [
     { name = "httpx" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/9f/7c/9fc86df92698f6a30dcf65a2f7cf590a3a7eae1721237a52f267f640d9cf/pympp-0.10.0.tar.gz", hash = "sha256:2ad0e8a1998dae6428028137caad187322e94e09b1d81220f34c50ddc23f2ffa", size = 170390, upload-time = "2026-08-03T19:42:38.649Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/8c/33a030844fbaad9e31c2eb9184a00938c6b2b31c2634bc0c7b9b973114c3/pympp-0.10.0-py3-none-any.whl", hash = "sha256:aee49dd8833be41d652d5ef944084201b6aef9f2bf8551d7d84e07f119cb9dee", size = 95036, upload-time = "2026-08-03T19:42:37.273Z" },
 ]
 
 [package.optional-dependencies]
@@ -1560,18 +1556,14 @@ tempo = [
 
 [[package]]
 name = "pytempo"
-version = "0.5.1"
-source = { registry = "https://pypi.org/simple" }
+version = "0.6.0"
+source = { git = "https://github.com/tempoxyz/pytempo.git?rev=ba81d3638a2609176956f1fe173b230163d56900#ba81d3638a2609176956f1fe173b230163d56900" }
 dependencies = [
     { name = "attrs" },
     { name = "eth-account" },
     { name = "eth-utils" },
     { name = "rlp" },
     { name = "web3" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f3/5b/2a31105f61a75413a8a61274443d610a7813142c1638956c76d963228896/pytempo-0.5.1.tar.gz", hash = "sha256:3f70c0bb8b3111b7eb56a334e22df0eeb715b8f35d77fced11358e8d487a6bad", size = 267288, upload-time = "2026-05-02T19:36:30.815Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/51/85d4f411c8768b3308b2ef40365f98b7d64ef33655b6bc67f612cdce9416/pytempo-0.5.1-py3-none-any.whl", hash = "sha256:3e912ad4e81455e54523d93dd27cf06921c624b56ec622a4d16e7726640cb04c", size = 38436, upload-time = "2026-05-02T19:36:29.667Z" },
 ]
 
 [[package]]

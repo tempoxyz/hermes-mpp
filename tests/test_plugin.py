@@ -53,12 +53,13 @@ def test_real_hermes_entrypoint_load_is_idempotent(
     )
 
 
-def test_registration_failure_restores_httpx(monkeypatch) -> None:
+def test_registration_failure_restores_httpx(tmp_path: Path, monkeypatch) -> None:
     class Context:
         def register_tool(self, **_kwargs) -> None:
             raise RuntimeError("conflict")
 
     monkeypatch.setenv("TEMPO_PRIVATE_KEY", TEST_PRIVATE_KEY)
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     original = inspect.getattr_static(httpx.Client, "_send_single_request")
 
     with pytest.raises(RuntimeError, match="conflict"):
