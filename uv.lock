@@ -820,7 +820,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27,<0.29" },
-    { name = "pympp", extras = ["tempo"], specifier = ">=0.10,<0.11" },
+    { name = "pympp", extras = ["tempo"], specifier = ">=0.11,<0.12" },
 ]
 
 [package.metadata.requires-dev]
@@ -1259,7 +1259,7 @@ name = "portalocker"
 version = "3.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pywin32" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/5e/77/65b857a69ed876e1951e88aaba60f5ce6120c33703f7cb61a3c894b8c1b6/portalocker-3.2.0.tar.gz", hash = "sha256:1f3002956a54a8c3730586c5c77bf18fae4149e07eaf1c29fc3faf4d5a3f89ac", size = 95644, upload-time = "2025-06-14T13:20:40.03Z" }
 wheels = [
@@ -1537,14 +1537,15 @@ crypto = [
 
 [[package]]
 name = "pympp"
-version = "0.10.0"
+version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
+    { name = "rfc8785" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9f/7c/9fc86df92698f6a30dcf65a2f7cf590a3a7eae1721237a52f267f640d9cf/pympp-0.10.0.tar.gz", hash = "sha256:2ad0e8a1998dae6428028137caad187322e94e09b1d81220f34c50ddc23f2ffa", size = 170390, upload-time = "2026-08-03T19:42:38.649Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/50/b7/b030c30c6ef748bd1c38acbdc2237907918b55e5d47115b6e80e74f7fec2/pympp-0.11.0.tar.gz", hash = "sha256:5264850cc3b8c8e3610aac6efc1ac390120623a47f376fb0973bf433eac45855", size = 205469, upload-time = "2026-08-28T21:23:22.06Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/8c/33a030844fbaad9e31c2eb9184a00938c6b2b31c2634bc0c7b9b973114c3/pympp-0.10.0-py3-none-any.whl", hash = "sha256:aee49dd8833be41d652d5ef944084201b6aef9f2bf8551d7d84e07f119cb9dee", size = 95036, upload-time = "2026-08-03T19:42:37.273Z" },
+    { url = "https://files.pythonhosted.org/packages/72/50/756e7c2a5936125afa04a0b258637a50d5d5eeec8cbe5e93e39d5fc5e445/pympp-0.11.0-py3-none-any.whl", hash = "sha256:714cb93a3d4f4fba31f062545617876dc460a7bc712947a7f6910ea5f9afa262", size = 113199, upload-time = "2026-08-28T21:23:20.849Z" },
 ]
 
 [package.optional-dependencies]
@@ -1801,6 +1802,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/34/64/8860370b167a9721e8956ae116825caff829224fbca0ca6e7bf8ddef8430/requests-2.33.0.tar.gz", hash = "sha256:c7ebc5e8b0f21837386ad0e1c8fe8b829fa5f544d8df3b2253bff14ef29d7652", size = 134232, upload-time = "2026-03-25T15:10:41.586Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/56/5d/c814546c2333ceea4ba42262d8c4d55763003e767fa169adc693bd524478/requests-2.33.0-py3-none-any.whl", hash = "sha256:3324635456fa185245e24865e810cecec7b4caf933d7eb133dcde67d48cee69b", size = 65017, upload-time = "2026-03-25T15:10:40.382Z" },
+]
+
+[[package]]
+name = "rfc8785"
+version = "0.1.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/2f/fa1d2e740c490191b572d33dbca5daa180cb423c24396b856f5886371d8b/rfc8785-0.1.4.tar.gz", hash = "sha256:e545841329fe0eee4f6a3b44e7034343100c12b4ec566dc06ca9735681deb4da", size = 14321, upload-time = "2024-09-27T16:33:31.206Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/78/119878110660b2ad709888c8a1614fce7e2fab39080ab960656dc8605bf6/rfc8785-0.1.4-py3-none-any.whl", hash = "sha256:520d690b448ecf0703691c76e1a34a24ddcd4fc5bc41d589cb7c58ec651bcd48", size = 9240, upload-time = "2024-09-27T16:33:29.683Z" },
 ]
 
 [[package]]
