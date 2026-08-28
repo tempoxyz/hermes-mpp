@@ -820,7 +820,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27,<0.29" },
-    { name = "pympp", extras = ["tempo"], git = "https://github.com/tempoxyz/pympp.git?rev=9b736efbeca1ea04ca1885f054c20211f55155ec" },
+    { name = "pympp", extras = ["tempo"], specifier = ">=0.11,<0.12" },
 ]
 
 [package.metadata.requires-dev]
@@ -1538,10 +1538,14 @@ crypto = [
 [[package]]
 name = "pympp"
 version = "0.11.0"
-source = { git = "https://github.com/tempoxyz/pympp.git?rev=9b736efbeca1ea04ca1885f054c20211f55155ec#9b736efbeca1ea04ca1885f054c20211f55155ec" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "rfc8785" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/50/b7/b030c30c6ef748bd1c38acbdc2237907918b55e5d47115b6e80e74f7fec2/pympp-0.11.0.tar.gz", hash = "sha256:5264850cc3b8c8e3610aac6efc1ac390120623a47f376fb0973bf433eac45855", size = 205469, upload-time = "2026-08-28T21:23:22.06Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/72/50/756e7c2a5936125afa04a0b258637a50d5d5eeec8cbe5e93e39d5fc5e445/pympp-0.11.0-py3-none-any.whl", hash = "sha256:714cb93a3d4f4fba31f062545617876dc460a7bc712947a7f6910ea5f9afa262", size = 113199, upload-time = "2026-08-28T21:23:20.849Z" },
 ]
 
 [package.optional-dependencies]
