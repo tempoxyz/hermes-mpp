@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3 (2026-08-28)
+
+### Patch Changes
+
+- Fixed wallet environment file writes to use `tempfile.mkstemp` so the temporary file is created with owner-only permissions (0o600) from the start, preventing a window where the private key could be readable by other users. (by @ParvAhuja, [#29](https://github.com/tempoxyz/hermes-mpp/pull/29))
+- Required the pympp release that supports MACH as an ordinary Tempo charge currency. (by @ParvAhuja, [#29](https://github.com/tempoxyz/hermes-mpp/pull/29))
+
 ## 0.1.2 (2026-08-11)
 
 ### Patch Changes
