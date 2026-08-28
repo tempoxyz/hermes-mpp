@@ -12,7 +12,7 @@ license = "MIT"
 authors = [{ name = "Tempo" }]
 dependencies = [
     "httpx>=0.27,<0.29",
-    "pympp[tempo]>=0.10.2,<0.11",
+    "pympp[tempo]>=0.11,<0.12",
 ]
 
 [project.urls]
@@ -40,7 +40,7 @@ override-dependencies = [
 ]
 
 [tool.uv.sources]
-pympp = { git = "https://github.com/tempoxyz/pympp.git", rev = "41a6491e5d385bbdd3fcbfbba8b86ae08348fe8f" }
+pympp = { git = "https://github.com/tempoxyz/pympp.git", rev = "9b736efbeca1ea04ca1885f054c20211f55155ec" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hermes_mpp"]
