@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from mpp import Challenge, Credential
 from mpp.errors import InvalidChallengeError
-from mpp.methods.tempo import CHAIN_ID, TempoAccount
+from mpp.methods.tempo import CHAIN_ID, MACH, TempoAccount
 
 import hermes_mpp.tempo as tempo_module
 from hermes_mpp.tempo import ChallengeTempo
@@ -50,23 +50,29 @@ async def test_uses_challenge_chain(
 
 
 @pytest.mark.asyncio
-async def test_delegates_challenge_priority(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[int] = []
+async def test_forwards_mach_charge_to_pympp(monkeypatch: pytest.MonkeyPatch) -> None:
+    credential = Credential(challenge="echo", payload={})
+    offered = Challenge(
+        id="mach",
+        method="tempo",
+        intent="charge",
+        request={
+            "amount": "1",
+            "currency": MACH,
+            "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00",
+            "methodDetails": {"chainId": CHAIN_ID},
+        },
+    )
 
     class Method:
-        async def get_challenge_priority(self, offered: Challenge) -> int:
-            assert offered.id == "challenge"
-            return 7
+        async def create_credential(self, challenge: Challenge) -> Credential:
+            assert challenge.request["currency"] == MACH
+            return credential
 
-    def tempo(**kwargs):
-        calls.append(kwargs["chain_id"])
-        return Method()
+    monkeypatch.setattr(tempo_module, "tempo", lambda **_: Method())
 
-    monkeypatch.setattr(tempo_module, "tempo", tempo)
     method = ChallengeTempo(TempoAccount.from_key(PRIVATE_KEY))
-
-    assert await method.get_challenge_priority(challenge(42431)) == 7
-    assert calls == [42431]
+    assert await method.create_credential(offered) is credential
 
 
 @pytest.mark.asyncio

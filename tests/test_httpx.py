@@ -49,26 +49,6 @@ def required(identifier: str, *, realm: str = "allowed.test") -> httpx.Response:
     )
 
 
-def required_many(*identifiers: str, realm: str = "allowed.test") -> httpx.Response:
-    challenges = [
-        Challenge(
-            id=identifier,
-            method="tempo",
-            intent="charge",
-            request={"amount": "1"},
-        )
-        for identifier in identifiers
-    ]
-    return httpx.Response(
-        402,
-        headers={
-            "www-authenticate": ", ".join(
-                challenge.to_www_authenticate(realm) for challenge in challenges
-            )
-        },
-    )
-
-
 def setup() -> tuple[FakeMethod, EventDispatcher, HttpxInstrumentation]:
     method = FakeMethod()
     events = EventDispatcher()
@@ -127,31 +107,6 @@ def test_sync_async_preexisting_and_events() -> None:
     assert names.count("payment.response") == 3
 
     preexisting.close()
-
-
-def test_shared_runtime_priority_selects_later_challenge() -> None:
-    selected: list[str] = []
-
-    class PriorityMethod(FakeMethod):
-        async def get_challenge_priority(self, challenge: Challenge) -> int:
-            return 1 if challenge.id == "funded" else -1
-
-        async def create_credential(self, challenge: Challenge) -> Credential:
-            selected.append(challenge.id)
-            return await super().create_credential(challenge)
-
-    method = PriorityMethod()
-    instrument_httpx(lambda: PaymentRuntime([method]), [ALLOWED])
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if "authorization" in request.headers:
-            return httpx.Response(200)
-        return required_many("unfunded", "funded")
-
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        assert client.get(f"{ALLOWED}/priority").status_code == 200
-
-    assert selected == ["funded"]
 
 
 def test_sync_response_hook_observes_only_paid_response() -> None:
