@@ -39,6 +39,9 @@ override-dependencies = [
     "pillow==12.3.0",
 ]
 
+[tool.uv.sources]
+pympp = { git = "https://github.com/tempoxyz/pympp.git", rev = "0a62dc460f8e07bb552b72636f6e4e1359f5e7d7" }
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/hermes_mpp"]
 

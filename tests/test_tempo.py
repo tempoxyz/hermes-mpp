@@ -50,6 +50,26 @@ async def test_uses_challenge_chain(
 
 
 @pytest.mark.asyncio
+async def test_delegates_challenge_priority(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[int] = []
+
+    class Method:
+        async def get_challenge_priority(self, offered: Challenge) -> int:
+            assert offered.id == "challenge"
+            return 7
+
+    def tempo(**kwargs):
+        calls.append(kwargs["chain_id"])
+        return Method()
+
+    monkeypatch.setattr(tempo_module, "tempo", tempo)
+    method = ChallengeTempo(TempoAccount.from_key(PRIVATE_KEY))
+
+    assert await method.get_challenge_priority(challenge(42431)) == 7
+    assert calls == [42431]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("chain_id", [True, "invalid", 999])
 async def test_rejects_invalid_or_unsupported_chain(
     monkeypatch: pytest.MonkeyPatch,

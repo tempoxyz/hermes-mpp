@@ -225,7 +225,7 @@ class HttpxInstrumentation:
         request = response.request
         try:
             runtime = self._runtime_factory()
-            match = _match(runtime, response)
+            match = await _match(runtime, response)
         except BaseException:
             await _close_quietly(response, asynchronous)
             raise
@@ -383,7 +383,7 @@ def instrument_httpx(
     return instrumentation
 
 
-def _match(runtime: PaymentRuntime, response: httpx.Response) -> _Match:
+async def _match(runtime: PaymentRuntime, response: httpx.Response) -> _Match:
     challenges: list[Challenge] = []
     parse_error: ParseError | None = None
     for header in response.headers.get_list("www-authenticate"):
@@ -396,7 +396,11 @@ def _match(runtime: PaymentRuntime, response: httpx.Response) -> _Match:
                 parse_error = error
 
     try:
-        challenge, method = runtime.match_challenge(challenges)
+        select_challenge = getattr(runtime, "select_challenge", None)
+        if select_challenge is None:
+            challenge, method = runtime.match_challenge(challenges)
+        else:
+            challenge, method = await select_challenge(challenges)
     except ValueError as error:
         return _Match(
             challenges,
