@@ -40,7 +40,7 @@ override-dependencies = [
 ]
 
 [tool.uv.sources]
-pympp = { git = "https://github.com/tempoxyz/pympp.git", rev = "098f2a4f47db0e3b2afc72b222eff2ed69bc69ae" }
+pympp = { git = "https://github.com/tempoxyz/pympp.git", rev = "c723b194e4024fd6c3b563a417f94c2683a139c5" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hermes_mpp"]
