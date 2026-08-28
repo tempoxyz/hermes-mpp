@@ -820,7 +820,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27,<0.29" },
-    { name = "pympp", extras = ["tempo"], git = "https://github.com/tempoxyz/pympp.git?rev=0a62dc460f8e07bb552b72636f6e4e1359f5e7d7" },
+    { name = "pympp", extras = ["tempo"], git = "https://github.com/tempoxyz/pympp.git?rev=60950b63869c0516625ca2ef1936766d2284af46" },
 ]
 
 [package.metadata.requires-dev]
@@ -1538,7 +1538,7 @@ crypto = [
 [[package]]
 name = "pympp"
 version = "0.10.1"
-source = { git = "https://github.com/tempoxyz/pympp.git?rev=0a62dc460f8e07bb552b72636f6e4e1359f5e7d7#0a62dc460f8e07bb552b72636f6e4e1359f5e7d7" }
+source = { git = "https://github.com/tempoxyz/pympp.git?rev=60950b63869c0516625ca2ef1936766d2284af46#60950b63869c0516625ca2ef1936766d2284af46" }
 dependencies = [
     { name = "httpx" },
     { name = "rfc8785" },
