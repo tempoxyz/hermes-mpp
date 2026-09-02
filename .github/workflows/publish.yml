@@ -33,7 +33,7 @@ jobs:
           persist-credentials: true
 
       - name: Install uv
-        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@6f436eb3a168279692739e8c0c9fdb52b94bfae7
+        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@3626124474a987bc74b41fc7ae65b2e23f8e4e4e
 
       - uses: tempoxyz/changelogs@a19f62e3fdbd6d07b8900eb0568ed09b868bf84d # OIDC trusted publishing
         with:
