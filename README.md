@@ -45,6 +45,39 @@ list.
 Paths and wildcards are rejected. Use plaintext `http://` only for trusted local
 development; an on-path attacker can inject a payment challenge.
 
+### Native plugin installation
+
+Hermes 0.21.3 or later can install the Python package as a directory plugin,
+using the runtime dependencies declared in its manifest:
+
+```sh
+hermes plugins install 'https://github.com/tempoxyz/hermes-mpp#src/hermes_mpp' --no-enable
+```
+
+If migrating from the `uvx` installation above, run `uvx hermes-mpp uninstall`
+first. This preserves the wallet configuration and avoids loading a second copy
+through the pip entry point.
+
+Before enabling, configure `TEMPO_PRIVATE_KEY` and `MPP_ALLOWED_ORIGINS` in the
+active Hermes profile's `.env` file (`~/.hermes/.env` for the default profile).
+Use an existing dedicated, low-balance wallet and keep that file owner-readable
+only. Enter the key locally, never in an agent conversation. For example, set
+`MPP_ALLOWED_ORIGINS=https://mpp.dev` to allow only that origin. Omitting the
+allowlist permits any origin with a supported MPP challenge to charge the wallet.
+
+```sh
+hermes plugins enable mpp
+```
+
+Restart Hermes after changing the wallet or allowlist. Without a configured key,
+the plugin leaves HTTPX untouched and its payment tool is unavailable.
+
+The proposed Plugin Catalog entry is named `hermes-mpp`; once admitted, install
+it with `hermes plugins install hermes-mpp --no-enable` and follow the same
+configuration steps. Catalog installations use a reviewed commit and update via
+`hermes plugins update mpp`. Do not run the `uvx` installer to update a catalog
+installation, because that installs a separate pip distribution.
+
 ## Use
 
 Ask Hermes for the resource normally:
