@@ -19,7 +19,12 @@ jobs:
     if: always()
     needs: [audit, test, httpx, package, install-smoke]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@27b9d9cb079918e6be16c8660f82bb0cf7fef6ea
       - env:
           ANY_FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
         run: |
@@ -31,7 +36,12 @@ jobs:
   audit:
     name: Audit runtime dependencies
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@27b9d9cb079918e6be16c8660f82bb0cf7fef6ea
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -49,8 +59,12 @@ jobs:
           --output-file "$RUNNER_TEMP/requirements-runtime.txt"
 
       - name: Audit runtime requirements
+        env:
+          REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
         run: >-
-          uvx --from pip-audit==2.10.1 pip-audit
+          uvx --from pip-audit==2.10.1
+          --with filelock==3.32.6 --with idna==3.19 --with platformdirs==4.11.8
+          --with urllib3==2.7.0 pip-audit
           -r "$RUNNER_TEMP/requirements-runtime.txt"
 
   test:
@@ -59,8 +73,13 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@27b9d9cb079918e6be16c8660f82bb0cf7fef6ea
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -89,8 +108,13 @@ jobs:
       fail-fast: false
       matrix:
         httpx-version: ["0.27.0", "0.28.1"]
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@27b9d9cb079918e6be16c8660f82bb0cf7fef6ea
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -115,7 +139,12 @@ jobs:
 
   package:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@27b9d9cb079918e6be16c8660f82bb0cf7fef6ea
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -130,7 +159,8 @@ jobs:
       - name: Build and validate package
         run: |
           uv build --no-sources
-          uvx --from twine==7.0.0 twine check --strict dist/*
+          uvx --from twine==7.0.0 --with idna==3.19 --with urllib3==2.7.0 \
+            twine check --strict dist/*
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -146,8 +176,13 @@ jobs:
       fail-fast: false
       matrix:
         profile: [base, hermes]
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@27b9d9cb079918e6be16c8660f82bb0cf7fef6ea
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -178,7 +213,18 @@ jobs:
           test -n "$wheel"
           install_targets=("$wheel")
           if [[ "$PROFILE" == "hermes" ]]; then
-            install_targets+=("hermes-agent==0.19.0")
+            install_targets+=(
+              "hermes-agent==0.19.0"
+              "filelock==3.32.6"
+              "idna==3.19"
+              "jiter==0.16.0"
+              "platformdirs==4.11.8"
+              "propcache==0.5.2"
+              "tqdm==4.70.0"
+              "urllib3==2.7.0"
+              "uvicorn==0.52.4"
+              "yarl==1.24.5"
+            )
           fi
           uv pip install --python .smoke-venv/bin/python "${install_targets[@]}"
 
