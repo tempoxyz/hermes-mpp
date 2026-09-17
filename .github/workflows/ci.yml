@@ -19,7 +19,12 @@ jobs:
     if: always()
     needs: [audit, test, httpx, package, install-smoke]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@27b9d9cb079918e6be16c8660f82bb0cf7fef6ea
       - env:
           ANY_FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
         run: |
@@ -31,7 +36,12 @@ jobs:
   audit:
     name: Audit runtime dependencies
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@27b9d9cb079918e6be16c8660f82bb0cf7fef6ea
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -59,8 +69,13 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@27b9d9cb079918e6be16c8660f82bb0cf7fef6ea
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -89,8 +104,13 @@ jobs:
       fail-fast: false
       matrix:
         httpx-version: ["0.27.0", "0.28.1"]
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@27b9d9cb079918e6be16c8660f82bb0cf7fef6ea
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -115,7 +135,12 @@ jobs:
 
   package:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@27b9d9cb079918e6be16c8660f82bb0cf7fef6ea
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -146,8 +171,13 @@ jobs:
       fail-fast: false
       matrix:
         profile: [base, hermes]
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@27b9d9cb079918e6be16c8660f82bb0cf7fef6ea
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
