@@ -51,7 +51,7 @@ Hermes 0.21.3 or later can install the Python package as a directory plugin,
 using the runtime dependencies declared in its manifest:
 
 ```sh
-hermes plugins install 'tempoxyz/hermes-mpp#src/hermes_mpp' --no-enable
+hermes plugins install 'https://github.com/tempoxyz/hermes-mpp#src/hermes_mpp' --no-enable
 ```
 
 If migrating from the `uvx` installation above, run `uvx hermes-mpp uninstall`
