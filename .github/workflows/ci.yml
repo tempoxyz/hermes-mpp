@@ -60,7 +60,9 @@ jobs:
 
       - name: Audit runtime requirements
         run: >-
-          uvx --from pip-audit==2.10.1 pip-audit
+          uvx --from pip-audit==2.10.1
+          --with filelock==3.32.6 --with idna==3.19 --with platformdirs==4.11.8
+          --with urllib3==2.7.0 pip-audit
           -r "$RUNNER_TEMP/requirements-runtime.txt"
 
   test:
@@ -155,7 +157,8 @@ jobs:
       - name: Build and validate package
         run: |
           uv build --no-sources
-          uvx --from twine==7.0.0 twine check --strict dist/*
+          uvx --from twine==7.0.0 --with idna==3.19 --with urllib3==2.7.0 \
+            twine check --strict dist/*
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
