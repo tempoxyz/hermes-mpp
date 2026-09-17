@@ -3,21 +3,26 @@
 from __future__ import annotations
 
 import atexit
+import os
 import threading
-from typing import Any
-
-from mpp.methods.tempo import TempoAccount
-from mpp.runtime import PaymentRuntime
+from typing import TYPE_CHECKING, Any
 
 from .config import Config
-from .httpx import HttpxInstrumentation, instrument_httpx
-from .tempo import ChallengeTempo
+
+if TYPE_CHECKING:
+    from .httpx import HttpxInstrumentation
 
 _instrumentation: HttpxInstrumentation | None = None
 _lock = threading.Lock()
 
 
 def _create_instrumentation(config: Config) -> HttpxInstrumentation:
+    from mpp.methods.tempo import TempoAccount
+    from mpp.runtime import PaymentRuntime
+
+    from .httpx import instrument_httpx
+    from .tempo import ChallengeTempo
+
     account = TempoAccount.from_key(config.private_key)
 
     def runtime_factory() -> PaymentRuntime:
@@ -29,6 +34,12 @@ def _create_instrumentation(config: Config) -> HttpxInstrumentation:
 def register(ctx: Any) -> None:
     """Make Hermes HTTP requests payment-aware."""
     from .tool import register_tool
+
+    # Hermes can discover and validate an unconfigured plugin. The tool's
+    # requires_env gate keeps it unavailable until the user configures a wallet.
+    if not os.environ.get("TEMPO_PRIVATE_KEY", "").strip():
+        register_tool(ctx)
+        return
 
     global _instrumentation
     with _lock:

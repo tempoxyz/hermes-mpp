@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import shutil
 from pathlib import Path
 
 import httpx
@@ -9,6 +10,51 @@ import pytest
 import hermes_mpp
 
 TEST_PRIVATE_KEY = "0x" + "11" * 32
+
+
+@pytest.mark.parametrize("configured", [False, True])
+def test_native_directory_plugin_load(tmp_path: Path, monkeypatch, configured: bool) -> None:
+    root = Path(__file__).resolve().parents[1] / "src" / "hermes_mpp"
+    home = tmp_path / "home"
+    plugin = home / "plugins" / "mpp"
+    shutil.copytree(root, plugin, ignore=shutil.ignore_patterns("__pycache__"))
+    bundled = tmp_path / "bundled"
+    bundled.mkdir()
+    (home / "config.yaml").write_text(
+        "_config_version: 33\nplugins:\n  enabled:\n    - mpp\n", encoding="utf-8"
+    )
+    monkeypatch.setenv("HERMES_HOME", str(home))
+    monkeypatch.setenv("HERMES_BUNDLED_PLUGINS", str(bundled))
+    monkeypatch.setenv("MPP_ALLOWED_ORIGINS", "https://mpp.dev")
+    if configured:
+        monkeypatch.setenv("TEMPO_PRIVATE_KEY", TEST_PRIVATE_KEY)
+    else:
+        monkeypatch.delenv("TEMPO_PRIVATE_KEY", raising=False)
+
+    from hermes_cli.plugins import PluginManager
+
+    manager = PluginManager()
+    # Exercise the directory distribution alone, as on a fresh catalog install.
+    monkeypatch.setattr("importlib.metadata.entry_points", lambda: [])
+    original = inspect.getattr_static(httpx.Client, "_send_single_request")
+    try:
+        manager.discover_and_load()
+        loaded = manager._plugins["mpp"]
+        assert loaded.enabled, loaded.error
+        assert loaded.manifest.source == "user"
+        assert loaded.tools_registered == ["mpp_fetch"]
+        if configured:
+            assert inspect.getattr_static(httpx.Client, "_send_single_request") is not original
+            transport = httpx.MockTransport(lambda _: httpx.Response(200))
+            with httpx.Client(transport=transport) as client:
+                assert client.get("https://mpp.dev/free").status_code == 200
+        else:
+            assert inspect.getattr_static(httpx.Client, "_send_single_request") is original
+    finally:
+        loaded = manager._plugins.get("mpp")
+        if loaded is not None and loaded.module is not None:
+            loaded.module._shutdown()
+    assert inspect.getattr_static(httpx.Client, "_send_single_request") is original
 
 
 def test_real_hermes_entrypoint_load_is_idempotent(
