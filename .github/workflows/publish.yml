@@ -37,7 +37,7 @@ jobs:
       - name: Install uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@d39baa2b43f5eba5d261c047521a4fbd56101129 # 2026-09-23T04-31-11Z-d39baa2b
 
-      - uses: tempoxyz/changelogs@a19f62e3fdbd6d07b8900eb0568ed09b868bf84d # OIDC trusted publishing
+      - uses: tempoxyz/changelogs@a19f62e3fdbd6d07b8900eb0568ed09b868bf84d # 2026-08-11T21-37-02Z-a19f62e3
         with:
           ecosystem: python
           python-version: '3.12'
