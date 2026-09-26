@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4 (2026-09-26)
+
+### Patch Changes
+
+- Add native Hermes plugin packaging for reviewed Plugin Catalog installation.
+- Allow discovery before wallet setup without instrumenting HTTPX or exposing the
+- payment tool until a private key is configured. (by @ShanedaSilva, [#40](https://github.com/tempoxyz/hermes-mpp/pull/40))
+
 ## 0.1.3 (2026-08-28)
 
 ### Patch Changes
