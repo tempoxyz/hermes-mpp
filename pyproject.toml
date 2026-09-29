@@ -33,6 +33,7 @@ dev = [
 ]
 
 [tool.uv]
+exclude-newer = "7 days"
 override-dependencies = [
     # Hermes Agent 0.19 pins vulnerable versions in the development environment.
     "cryptography==50.0.0",
