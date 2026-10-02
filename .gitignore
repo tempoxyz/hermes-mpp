@@ -5,6 +5,7 @@ dist/
 wheels/
 *.egg-info
 .venv/
+.smoke-venv/
 .pytest_cache/
 .ruff_cache
 .coverage

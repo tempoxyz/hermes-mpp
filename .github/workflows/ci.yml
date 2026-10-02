@@ -45,6 +45,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          submodules: true
 
       - name: Install uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
@@ -83,6 +84,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          submodules: true
 
       - name: Install uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
@@ -118,6 +120,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          submodules: true
 
       - name: Install uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
@@ -148,6 +151,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          submodules: true
 
       - name: Install uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
@@ -186,6 +190,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          submodules: true
 
       - name: Install uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
@@ -214,7 +219,7 @@ jobs:
           install_targets=("$wheel")
           if [[ "$PROFILE" == "hermes" ]]; then
             install_targets+=(
-              "hermes-agent==0.19.0"
+              --editable ".vendor/hermes-agent"
               "filelock==3.32.6"
               "idna==3.19"
               "jiter==0.16.0"
