@@ -13,6 +13,7 @@ authors = [{ name = "Tempo" }]
 dependencies = [
     "httpx>=0.27,<0.29",
     "pympp[tempo]>=0.11,<0.12",
+    "urllib3>=2.8,<3",
 ]
 
 [project.urls]
@@ -38,6 +39,8 @@ override-dependencies = [
     # Hermes Agent 0.19 pins vulnerable versions in the development environment.
     "cryptography==50.0.0",
     "pillow==12.3.0",
+    "pyjwt==2.15.0",
+    "urllib3==2.8.0",
 ]
 
 [tool.hatch.build.targets.wheel]
