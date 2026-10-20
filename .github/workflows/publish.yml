@@ -38,6 +38,8 @@ jobs:
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@947d9a3ccb2425a9c94d563fd721cc0e33c89e26 # 2026-10-15T00-15-06Z-947d9a3c
 
       - uses: tempoxyz/changelogs@83e69646d7ef76c5f35364d3a06fce3a6fe62bf9 # 2026-09-07T12-57-31Z-83e69646 # zizmor: ignore[ref-version-mismatch] pinact verifies this untagged commit via its timestamp and SHA
+        env:
+          PIP_CONSTRAINT: ${{ github.workspace }}/.github/release-tool-constraints.txt
         with:
           ecosystem: python
           python-version: '3.12'
