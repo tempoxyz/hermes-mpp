@@ -120,6 +120,7 @@ Uninstalling leaves the private key in Hermes's `.env` file.
 ## Develop
 
 ```sh
+git submodule update --init .vendor/hermes-agent
 uv sync
 uv run pytest
 uv run ruff check .
@@ -127,9 +128,18 @@ uv run ruff check .
 
 CI tests Python 3.11–3.13 and HTTPX 0.27–0.28.
 
+Development and CI use Hermes Agent 0.21.5 from the pinned `v2026.9.24` release
+commit as an editable submodule because upstream no longer supports wheel builds
+and PyPI only provides older versions. Hermes is not a runtime dependency of this
+package.
+
 ## Security
 
 Report vulnerabilities privately as described in [SECURITY.md](./SECURITY.md).
+
+The pinned development Hermes checkout still has the Feishu webhook quota-ordering
+issue (CVE-2026-10224). Do not expose that webhook while using this checkout; the
+[upstream fix](https://github.com/NousResearch/hermes-agent/pull/73406) is pending.
 
 ## License
 
