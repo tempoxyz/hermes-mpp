@@ -63,7 +63,8 @@ jobs:
           REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
         run: >-
           uvx --from pip-audit==2.10.1
-          --with filelock==3.32.6 --with idna==3.19 --with platformdirs==4.11.8
+          --with certifi==2026.5.20 --with filelock==3.32.6
+          --with idna==3.19 --with platformdirs==4.11.8
           --with urllib3==2.8.0 pip-audit
           --require-hashes --disable-pip -r "$RUNNER_TEMP/requirements-runtime.txt"
 
@@ -159,7 +160,8 @@ jobs:
       - name: Build and validate package
         run: |
           uv build --no-sources
-          uvx --from twine==7.0.0 --with idna==3.19 --with urllib3==2.8.0 \
+          uvx --from twine==7.0.0 --with certifi==2026.5.20 \
+            --with idna==3.19 --with urllib3==2.8.0 \
             twine check --strict dist/*
 
       - name: Upload package artifacts
