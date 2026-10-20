@@ -1,0 +1,4 @@
+# Match CI's cooled Twine dependencies for the changelogs action's pip install.
+certifi==2026.5.20
+idna==3.19
+urllib3==2.8.0
