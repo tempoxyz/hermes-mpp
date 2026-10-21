@@ -35,12 +35,13 @@ dev = [
 
 [tool.uv]
 exclude-newer = "7 days"
-exclude-newer-package = { certifi = "2026-10-20T03:00:00Z" }
+# Allow the Pillow security release through the default dependency cooldown.
+exclude-newer-package = { certifi = "2026-10-20T03:00:00Z", pillow = "2026-10-21T00:00:00Z" }
 override-dependencies = [
     "certifi==2026.10.19",
     # Hermes Agent 0.19 pins vulnerable versions in the development environment.
     "cryptography==50.0.0",
-    "pillow==12.3.0",
+    "pillow==13.0.0",
     "pyjwt==2.15.0",
     "urllib3==2.8.0",
 ]
