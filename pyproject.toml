@@ -35,7 +35,9 @@ dev = [
 
 [tool.uv]
 exclude-newer = "7 days"
+exclude-newer-package = { certifi = "2026-10-20T03:00:00Z" }
 override-dependencies = [
+    "certifi==2026.10.19",
     # Hermes Agent 0.19 pins vulnerable versions in the development environment.
     "cryptography==50.0.0",
     "pillow==12.3.0",
