@@ -34,7 +34,7 @@ dev = [
 ]
 
 [tool.uv]
-exclude-newer = "7 days"
+exclude-newer = "1 day"
 # Allow the Pillow security release through the default dependency cooldown.
 exclude-newer-package = { certifi = "2026-10-20T03:00:00Z", pillow = "2026-10-21T00:00:00Z" }
 override-dependencies = [
