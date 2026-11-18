@@ -38,12 +38,15 @@ exclude-newer = "1 day"
 # Allow the Pillow security release through the default dependency cooldown.
 exclude-newer-package = { certifi = "2026-10-20T03:00:00Z", pillow = "2026-10-21T00:00:00Z" }
 override-dependencies = [
+    # pympp[tempo] 0.25 pins yarl 1.24.5, which holds web3 on a vulnerable aiohttp; see yarl below.
+    "aiohttp==3.14.5",
     "certifi==2026.10.19",
     # Hermes Agent 0.19 pins vulnerable versions in the development environment.
     "cryptography==50.0.0",
     "pillow==13.0.0",
     "pyjwt==2.15.0",
     "urllib3==2.8.0",
+    "yarl==1.25.1",
 ]
 
 [tool.hatch.build.targets.wheel]
