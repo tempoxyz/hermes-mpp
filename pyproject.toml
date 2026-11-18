@@ -7,12 +7,12 @@ name = "hermes-mpp"
 version = "0.1.3"
 description = "Transparent MPP payments for Hermes Agent HTTP traffic"
 readme = "README.md"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11,<3.15"
 license = "MIT"
 authors = [{ name = "Tempo" }]
 dependencies = [
     "httpx>=0.27,<0.29",
-    "pympp[tempo]>=0.11,<0.12",
+    "pympp[tempo]>=0.25,<0.26",
     "urllib3>=2.8,<3",
 ]
 

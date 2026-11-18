@@ -1,34 +1,40 @@
 from __future__ import annotations
 
-from mpp import Challenge, Credential
-from mpp.errors import InvalidChallengeError
-from mpp.methods.tempo import CHAIN_ID, ChargeIntent, TempoAccount, tempo
+from dataclasses import replace
+
+from mpp import Challenge
+from mpp.methods.tempo import CHAIN_ID, TESTNET_CHAIN_ID, TempoAccount
+from mpp.methods.tempo.client import charge
+from mpp.runtime import ClientMethod
+
+SUPPORTED_CHAIN_IDS = (CHAIN_ID, TESTNET_CHAIN_ID)
 
 
-class ChallengeTempo:
-    """Tempo charge method that follows the challenge's chain."""
+def _chain_id(challenge: Challenge) -> int | None:
+    details = challenge.request.get("methodDetails", {})
+    if not isinstance(details, dict):
+        return None
+    value = details.get("chainId", CHAIN_ID)
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
-    name = "tempo"
 
-    def __init__(self, account: TempoAccount) -> None:
-        self.account = account
+def tempo_charge(account: TempoAccount) -> ClientMethod:
+    """Tempo charge method that pays on the supported chain the challenge names."""
+    method = charge(
+        account=account,
+        client_id="hermes-agent",
+        allowed_chain_ids=SUPPORTED_CHAIN_IDS,
+    )
+    inner = method.can_handle_challenge
 
-    async def create_credential(self, challenge: Challenge) -> Credential:
-        try:
-            details = challenge.request.get("methodDetails", {})
-            if not isinstance(details, dict):
-                raise TypeError("methodDetails must be an object")
-            value = details.get("chainId", CHAIN_ID)
-            if isinstance(value, bool) or not isinstance(value, (int, str)):
-                raise ValueError
-            chain_id = int(value)
-            method = tempo(
-                account=self.account,
-                intents={"charge": ChargeIntent()},
-                chain_id=chain_id,
-                client_id="hermes-agent",
-            )
-            return await method.create_credential(challenge)
-        except (KeyError, TypeError, ValueError) as error:
-            reason = str(error) or "invalid or unsupported Tempo challenge"
-            raise InvalidChallengeError(challenge.id, reason) from error
+    def can_handle_challenge(challenge: Challenge) -> bool:
+        if _chain_id(challenge) not in SUPPORTED_CHAIN_IDS:
+            return False
+        return inner is None or inner(challenge)
+
+    return replace(method, can_handle_challenge=can_handle_challenge)

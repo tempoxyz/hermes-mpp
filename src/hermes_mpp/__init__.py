@@ -21,12 +21,12 @@ def _create_instrumentation(config: Config) -> HttpxInstrumentation:
     from mpp.runtime import PaymentRuntime
 
     from .httpx import instrument_httpx
-    from .tempo import ChallengeTempo
+    from .tempo import tempo_charge
 
     account = TempoAccount.from_key(config.private_key)
 
     def runtime_factory() -> PaymentRuntime:
-        return PaymentRuntime([ChallengeTempo(account)])
+        return PaymentRuntime([tempo_charge(account)])
 
     return instrument_httpx(runtime_factory, config.allowed_origins)
 
