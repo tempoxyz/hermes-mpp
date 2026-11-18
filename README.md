@@ -14,7 +14,7 @@ Maintained by [Tempo](https://tempo.xyz), the team behind [MPP](https://mpp.dev)
 > This is experimental v0 software. It can authorize real payments automatically with the
 > configured Tempo key. Use a dedicated, low-balance key and restrict allowed origins.
 
-v0 targets Hermes Agent 0.19, HTTPX 0.27–0.28, and pympp 0.10.
+v0 targets Hermes Agent 0.19 through 0.23, HTTPX 0.27–0.28, and pympp 0.25.
 
 ## Install
 
@@ -125,7 +125,7 @@ uv run pytest
 uv run ruff check .
 ```
 
-CI tests Python 3.11–3.13 and HTTPX 0.27–0.28.
+CI tests Python 3.11–3.14 and HTTPX 0.27–0.28.
 
 ## Security
 

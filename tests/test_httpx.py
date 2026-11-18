@@ -11,7 +11,9 @@ import pytest
 from mpp import Challenge, Credential
 from mpp.errors import PaymentError, PaymentOutcomeUnknownError
 from mpp.events import WILDCARD_EVENT, EventDispatcher
-from mpp.runtime import PaymentRuntime
+from mpp.methods.tempo import TempoAccount
+from mpp.methods.tempo.client import charge
+from mpp.runtime import ClientMethod, CredentialParams, PaymentRuntime
 
 from hermes_mpp.httpx import (
     HttpxInstrumentation,
@@ -22,11 +24,18 @@ from hermes_mpp.httpx import (
 ALLOWED = "https://allowed.test"
 
 
+TEMPO_CHARGE = charge(account=TempoAccount.from_key("0x" + "11" * 32)).method
+
+
 class FakeMethod:
     name = "tempo"
 
     def __init__(self) -> None:
         self.calls = 0
+        self.client = ClientMethod(method=TEMPO_CHARGE, create_credential=self._authorize)
+
+    async def _authorize(self, params: CredentialParams) -> str:
+        return (await self.create_credential(params.challenge)).to_authorization()
 
     async def create_credential(self, challenge: Challenge) -> Credential:
         self.calls += 1
@@ -53,7 +62,7 @@ def setup() -> tuple[FakeMethod, EventDispatcher, HttpxInstrumentation]:
     method = FakeMethod()
     events = EventDispatcher()
     instrumentation = instrument_httpx(
-        lambda: PaymentRuntime([method], events=events),
+        lambda: PaymentRuntime([method.client], events=events),
         [ALLOWED],
     )
     return method, events, instrumentation
@@ -246,7 +255,7 @@ def test_scoped_cookie_update_does_not_remove_manual_cookie(
 ) -> None:
     method = FakeMethod()
     instrument_httpx(
-        lambda: PaymentRuntime([method]),
+        lambda: PaymentRuntime([method.client]),
         [url.removesuffix("/paid")],
     )
     cookies: list[str] = []
@@ -291,7 +300,7 @@ def test_origin_policy_includes_redirect_target() -> None:
 
 def test_missing_origin_policy_allows_any_origin() -> None:
     method = FakeMethod()
-    instrument_httpx(lambda: PaymentRuntime([method]), None)
+    instrument_httpx(lambda: PaymentRuntime([method.client]), None)
     requests: list[httpx.Request] = []
 
     with httpx.Client(transport=paid_handler("anywhere", requests)) as client:
@@ -386,7 +395,7 @@ def test_method_internal_httpx_is_not_instrumented_recursively() -> None:
 
     method = RecursiveMethod()
     instrument_httpx(
-        lambda: PaymentRuntime([method]),
+        lambda: PaymentRuntime([method.client]),
         [ALLOWED],
     )
     requests: list[httpx.Request] = []
@@ -637,13 +646,13 @@ def test_runtime_factory_failure_closes_challenge_response() -> None:
 def test_rejects_non_origin_allowlist_values(origin: str) -> None:
     method = FakeMethod()
     with pytest.raises(ValueError, match="Invalid HTTP origin"):
-        HttpxInstrumentation(lambda: PaymentRuntime([method]), [origin])
+        HttpxInstrumentation(lambda: PaymentRuntime([method.client]), [origin])
 
 
 def test_rejects_a_bare_origin_string() -> None:
     method = FakeMethod()
     with pytest.raises(TypeError, match="sequence of strings"):
-        HttpxInstrumentation(lambda: PaymentRuntime([method]), ALLOWED)
+        HttpxInstrumentation(lambda: PaymentRuntime([method.client]), ALLOWED)
 
 
 def test_version_and_private_seam_compatibility_checks(
@@ -656,9 +665,9 @@ def test_version_and_private_seam_compatibility_checks(
 
 def test_registration_is_transactional_and_restore_is_owner_safe() -> None:
     method = FakeMethod()
-    first = instrument_httpx(lambda: PaymentRuntime([method]), [ALLOWED])
+    first = instrument_httpx(lambda: PaymentRuntime([method.client]), [ALLOWED])
     with pytest.raises(RuntimeError, match="already instrumented"):
-        instrument_httpx(lambda: PaymentRuntime([method]), [ALLOWED])
+        instrument_httpx(lambda: PaymentRuntime([method.client]), [ALLOWED])
 
     original = inspect.getattr_static(httpx.Client, "_send_single_request")
 

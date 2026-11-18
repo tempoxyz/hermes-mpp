@@ -23,7 +23,7 @@ from mpp.errors import (
     PaymentOutcomeUnknownError,
 )
 from mpp.events import PAYMENT_FAILED, PAYMENT_RESPONSE
-from mpp.runtime import Method, PaymentRuntime
+from mpp.runtime import ClientMethod, PaymentRuntime
 
 RuntimeFactory = Callable[[], PaymentRuntime]
 Origin = tuple[str, str, int | None]
@@ -117,7 +117,7 @@ class _Ledger:
 class _Match:
     challenges: list[Challenge]
     challenge: Challenge | None = None
-    method: Method | None = None
+    method: ClientMethod | None = None
     error: Exception | None = None
 
 
