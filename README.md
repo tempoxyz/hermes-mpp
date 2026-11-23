@@ -8,7 +8,7 @@
 traffic payment-aware. It answers supported MPP `402` challenges with a Tempo
 charge and retries the request through the same client.
 
-Maintained by [Tempo](https://tempo.xyz), the team behind [MPP](https://mpp.dev).
+Maintained by [Tempo](https://tempo.com), the team behind [MPP](https://mpp.dev).
 
 > [!IMPORTANT]
 > This is experimental v0 software. It can authorize real payments automatically with the
@@ -35,7 +35,7 @@ For a custom environment, run `uvx hermes-mpp install --hermes-python PATH` or
 set `HERMES_PYTHON`.
 
 Generated wallets start empty. For testnet resources, fund the printed address
-with the [Tempo faucet](https://docs.tempo.xyz/guide/use-accounts/add-funds).
+with the [Tempo faucet](https://tempo.com/developers/docs/guide/getting-funds).
 
 On first install, omitting `--allowed-origin` allows any origin presenting a valid
 MPP challenge to charge the wallet. Repeat the option to allow multiple exact
